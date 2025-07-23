@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+.Python
+build/
+dist/
+*.egg-info/
+.env
+.venv
+venv/
+
+# Pyppeteer downloads (if they were in the project directory)
+# Pyppeteer typically downloads to a user-specific cache, not project dir.
+# If it were configured to download locally, you might add:
+# pyppeteer_downloads/
+
+# Environment variables
+.env.local
+
+# Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# Logs and temporary files
+*.log
+*.bak

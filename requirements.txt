@@ -1,0 +1,12 @@
+# Headless browser automation
+pyppeteer==1.0.2
+# HTML parsing fallback
+beautifulsoup4==4.12.3
+# ISO 8601 duration parsing
+python-dateutil==2.9.0
+# Pretty CLI
+rich==13.7.1
+# OpenAI API
+openai==1.35.13
+# Environment variables
+python-dotenv==1.0.1
