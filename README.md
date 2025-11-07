@@ -1,4 +1,4 @@
-# parsely-cli
+# Parsely CLI
 
 This project provides a robust and user-friendly command-line interface (CLI) tool for extracting recipe information from various websites. It leverages Pyppeteer for efficient web scraping and includes an intelligent AI fallback mechanism using OpenAI's `gpt-4o-mini` model for sites that are difficult to scrape directly.
 
@@ -8,6 +8,10 @@ This project provides a robust and user-friendly command-line interface (CLI) to
 *   **AI Fallback:** Automatically switches to OpenAI's `gpt-4o-mini` for recipe extraction if direct scraping fails or JSON-LD is not found.
 *   **Interactive CLI:** Provides a colorful and animated command-line experience with loading indicators and prompts for user input.
 *   **Structured Output:** Extracts key recipe details including `cookTime`, `prepTime`, `totalTime`, `recipeIngredient`, and `recipeInstructions`.
+
+## Preview
+
+![Parsely CLI Screenshot](screenshot.png)
 
 ## Project Structure
 
@@ -19,7 +23,7 @@ parsely-cli/
 ├── run.sh              # Helper script to set up environment and run the app
 └── src/
     ├── __init__.py
-    └── recipe_scraper.py # Main application logic
+    └── parsely_cli.py  # Main application logic
 ```
 
 ## Setup and Installation
@@ -35,7 +39,7 @@ To get started with the recipe extractor, follow these steps:
 
 2.  **Create `.env.local` for API Keys:**
 
-    Create a file named `.env.local` in the `parsely-cli/` directory and add your OpenAI API key:
+    Create a file named `.env.local` in the project root directory and add your OpenAI API key:
 
     ```
     OPENAI_API_KEY="YOUR_API_KEY_HERE"
@@ -45,7 +49,7 @@ To get started with the recipe extractor, follow these steps:
 
 3.  **Run the Setup Script:**
 
-    The `run.sh` script will set up a Python virtual environment, install all necessary dependencies, and prepare the application for use. Navigate to the `parsely-cli` directory and run:
+    The `run.sh` script will set up a Python virtual environment, install all necessary dependencies, and prepare the application for use. Navigate to the project root directory and run:
 
     ```bash
     ./run.sh
@@ -86,3 +90,11 @@ Follow the on-screen prompts to enter the URL. The CLI will display a loading sp
 *   **`EOFError: EOF when reading a line`:** This error typically occurs in non-interactive environments (like some IDE terminals or automated scripts) when the `Prompt.ask()` function is used. To avoid this, always provide the URL as a command-line argument in such environments.
 *   **`TypeError: Invalid http_client argument`:** Ensure your `httpx` and `openai` library versions are compatible. The provided `requirements.txt` should handle this. If you encounter this, ensure you've run `./run.sh` to install/update dependencies.
 *   **`Error: OpenAI API key not found`:** Make sure you have created the `.env.local` file in the `parsely-cli/` directory and replaced `"YOUR_API_KEY_HERE"` with your actual OpenAI API key.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Code of Conduct
+
+Please refer to our [Code of Conduct](CODE_OF_CONDUCT.md) for guidelines on participating in this project.
