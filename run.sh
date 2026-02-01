@@ -4,19 +4,20 @@ set -e
 # Navigate to the script's directory to ensure paths are correct
 cd "$(dirname "$0")"
 
-echo "Setting up virtual environment..."
-# Recreate venv to avoid stale absolute paths after directory moves
-if [ -d "venv" ]; then
-  echo "Removing existing virtual environment..."
-  rm -rf venv
+# Ensure Node.js is available
+if ! command -v node &>/dev/null; then
+  echo "Error: Node.js is required but not found. Install it from https://nodejs.org"
+  exit 1
 fi
-python3 -m venv venv
-source venv/bin/activate
 
-echo "Installing dependencies..."
-pip install -r requirements.txt
+# Install dependencies if node_modules is missing
+if [ ! -d "node_modules" ]; then
+  echo "Installing dependencies..."
+  npm install
+fi
 
-# Explicitly set COLORTERM to ensure rich renders colors
+# Ensure color support for the TUI
 export COLORTERM=truecolor
 
-python -m src.parsely_cli "$@"
+# Launch the Ink-based TUI
+npx tsx src/cli.tsx "$@"
