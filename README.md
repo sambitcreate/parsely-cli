@@ -1,13 +1,16 @@
 # Parsely CLI
 
-This project provides a robust and user-friendly command-line interface (CLI) tool for extracting recipe information from various websites. It leverages Pyppeteer for efficient web scraping and includes an intelligent AI fallback mechanism using OpenAI's `gpt-4o-mini` model for sites that are difficult to scrape directly.
+A smart, interactive recipe scraper for the terminal. Parsely extracts structured recipe data (ingredients, instructions, cook times) from any recipe URL using headless Chrome with an intelligent AI fallback.
+
+Built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs) for a rich, responsive terminal UI.
 
 ## Features
 
-*   **Pyppeteer-based Scraping:** Utilizes headless Chrome for fast and accurate extraction of Schema.org JSON-LD data.
-*   **AI Fallback:** Automatically switches to OpenAI's `gpt-4o-mini` for recipe extraction if direct scraping fails or JSON-LD is not found.
-*   **Interactive CLI:** Provides a colorful and animated command-line experience with loading indicators and prompts for user input.
-*   **Structured Output:** Extracts key recipe details including `cookTime`, `prepTime`, `totalTime`, `recipeIngredient`, and `recipeInstructions`.
+- **Interactive TUI** — Full terminal interface built with Ink and React, featuring bordered panels, spinners, and color-coded output.
+- **Browser Scraping** — Headless Chrome via Puppeteer extracts Schema.org JSON-LD data from recipe pages, handling JavaScript-rendered content.
+- **AI Fallback** — Automatically switches to OpenAI `gpt-4o-mini` when browser scraping can't find recipe data.
+- **Structured Output** — Displays prep time, cook time, total time, ingredients, and step-by-step instructions in a clean card layout.
+- **Keyboard-Driven** — Context-aware keybind hints in the footer; press `n` for a new recipe or `q` to quit.
 
 ## Preview
 
@@ -17,84 +20,132 @@ This project provides a robust and user-friendly command-line interface (CLI) to
 
 ```
 parsely-cli/
-├── .env.local          # Configuration for API keys (e.g., OpenAI)
-├── README.md           # Project overview and instructions
-├── requirements.txt    # Python dependencies
-├── run.sh              # Helper script to set up environment and run the app
-└── src/
-    ├── __init__.py
-    └── parsely_cli.py  # Main application logic
+├── src/
+│   ├── cli.tsx              # Entry point — arg parsing, renders <App>
+│   ├── app.tsx              # Root component — state machine (idle → scraping → display)
+│   ├── theme.ts             # Color palette and symbols
+│   ├── components/
+│   │   ├── Banner.tsx       # ASCII art header
+│   │   ├── URLInput.tsx     # URL text input with validation
+│   │   ├── RecipeCard.tsx   # Recipe display card (times, ingredients, instructions)
+│   │   ├── ScrapingStatus.tsx # Spinner with phase updates
+│   │   ├── Footer.tsx       # Context-aware keybind hints
+│   │   ├── Welcome.tsx      # Welcome message
+│   │   └── ErrorDisplay.tsx # Error panel
+│   ├── services/
+│   │   └── scraper.ts       # Puppeteer + OpenAI scraping logic
+│   └── utils/
+│       └── helpers.ts       # ISO duration parser, config, URL validation
+├── package.json
+├── tsconfig.json
+├── run.sh                   # Quick-start launcher script
+├── .env.local               # Your OpenAI API key (create this)
+├── CLAUDE.md                # AI assistant context
+├── CODE_OF_CONDUCT.md
+└── LICENSE
 ```
 
-## Setup and Installation
+## Setup
 
-To get started with the recipe extractor, follow these steps:
+### Prerequisites
 
-1.  **Clone the Repository (if applicable):**
+- **Node.js** v18 or later
+- **npm** v9 or later
 
-    ```bash
-    git clone <your-repository-url>
-    cd parsely-cli
-    ```
+### Installation
 
-2.  **Create `.env.local` for API Keys:**
+1. **Clone the repository:**
 
-    Create a file named `.env.local` in the project root directory and add your OpenAI API key:
+   ```bash
+   git clone <your-repository-url>
+   cd parsely-cli
+   ```
 
-    ```
-    OPENAI_API_KEY="YOUR_API_KEY_HERE"
-    ```
+2. **Install dependencies:**
 
-    **Important:** Replace `"YOUR_API_KEY_HERE"` with your actual OpenAI API key. Without this, the AI fallback will not function.
+   ```bash
+   npm install
+   ```
 
-3.  **Run the Setup Script:**
+   Uses `puppeteer-core` — no Chromium download. The CLI auto-detects system Chrome/Chromium. If none is found, browser scraping is skipped and the AI fallback is used.
 
-    The `run.sh` script will set up a Python virtual environment, install all necessary dependencies, and prepare the application for use. Navigate to the project root directory and run:
+3. **Configure AI fallback (optional but recommended):**
 
-    ```bash
-    ./run.sh
-    ```
+   Create a `.env.local` file in the project root:
 
-    The first time you run this, it will download Chromium for Pyppeteer (approx. 150 MB) and install all Python packages. This might take a few moments.
+   ```
+   OPENAI_API_KEY="your_openai_api_key_here"
+   ```
+
+   Without this, the AI fallback will not function — browser scraping will still work for most recipe sites.
 
 ## Usage
 
-Once set up, you can use the CLI tool in two ways:
-
-### 1. With a URL Argument
-
-Provide the recipe URL directly as an argument to the `run.sh` script:
-
-```bash
-./run.sh https://www.simplyrecipes.com/recipes/perfect_guacamole/
-```
-
-### 2. Interactive Mode
-
-If you run `run.sh` without a URL, the CLI will enter an interactive mode and prompt you to enter the recipe URL:
+### Quick Start
 
 ```bash
 ./run.sh
 ```
 
-Follow the on-screen prompts to enter the URL. The CLI will display a loading spinner and colorful output as it processes the recipe.
+The launcher script installs dependencies automatically on first run, then starts the TUI.
 
-## How it Works
+### With a URL Argument
 
-1.  **Initial Scraping (Pyppeteer):** The tool first attempts to scrape the recipe using Pyppeteer, which renders the web page and looks for Schema.org JSON-LD data. This is the fastest and most accurate method when available.
-2.  **AI Fallback (OpenAI GPT-4o-mini):** If Pyppeteer fails to fetch the page (e.g., due to timeouts) or if no JSON-LD is found on the page, the tool automatically falls back to using OpenAI's `gpt-4o-mini` model. It sends the URL to the AI, which then extracts the relevant recipe information.
-3.  **Unified Output:** Regardless of the scraping method, the extracted recipe data is normalized and presented in a consistent, easy-to-read, and colorful format in your terminal.
+```bash
+npm start -- https://www.simplyrecipes.com/recipes/perfect_guacamole/
+```
+
+Or via the run script:
+
+```bash
+./run.sh https://www.simplyrecipes.com/recipes/perfect_guacamole/
+```
+
+### Interactive Mode
+
+Run without arguments and enter a URL when prompted:
+
+```bash
+npm start
+```
+
+### Keyboard Shortcuts
+
+| Key      | Context  | Action            |
+| -------- | -------- | ----------------- |
+| `Enter`  | Input    | Submit URL        |
+| `n`      | Display  | Scrape new recipe |
+| `q`      | Display  | Quit              |
+| `Ctrl+C` | Anywhere | Exit              |
+
+## How It Works
+
+1. **Browser Scraping** — Puppeteer launches headless Chrome, navigates to the URL, and extracts `<script type="application/ld+json">` blocks. The first Schema.org `Recipe` object found is parsed and displayed.
+
+2. **AI Fallback** — If the browser fails or no JSON-LD recipe is found, the URL is sent to OpenAI's `gpt-4o-mini` with a structured extraction prompt. The model returns recipe data as JSON.
+
+3. **Display** — Recipe data is rendered in a bordered card with color-coded sections for times, ingredients, and instructions.
+
+## Architecture
+
+The TUI is built with **Ink** (React for the terminal) following patterns inspired by [OpenCode](https://github.com/anomalyco/opencode):
+
+- **Component-based architecture** — Each UI element is an isolated React component.
+- **State machine** — The app cycles through phases: `idle` → `scraping` → `display` (or `error`).
+- **Theme system** — Centralized color palette in `theme.ts` for consistent styling.
+- **Context-aware footer** — Keybind hints update based on the current phase.
+- **Callback-driven progress** — The scraper reports phase changes to the TUI via callbacks so the spinner updates in real time.
 
 ## Troubleshooting
 
-*   **`EOFError: EOF when reading a line`:** This error typically occurs in non-interactive environments (like some IDE terminals or automated scripts) when the `Prompt.ask()` function is used. To avoid this, always provide the URL as a command-line argument in such environments.
-*   **`TypeError: Invalid http_client argument`:** Ensure your `httpx` and `openai` library versions are compatible. The provided `requirements.txt` should handle this. If you encounter this, ensure you've run `./run.sh` to install/update dependencies.
-*   **`Error: OpenAI API key not found`:** Make sure you have created the `.env.local` file in the `parsely-cli/` directory and replaced `"YOUR_API_KEY_HERE"` with your actual OpenAI API key.
+- **`Error: OpenAI API key not found`** — Create a `.env.local` file with your API key. The AI fallback requires this, but browser scraping works without it.
+- **Browser scraping skipped** — The CLI auto-detects system Chrome/Chromium. If none is found, it skips browser scraping and uses the AI fallback. Install Chrome or Chromium to enable browser scraping.
+- **No recipe found** — Some sites use non-standard recipe markup. The AI fallback handles most of these, but results depend on the OpenAI model's ability to extract the recipe.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## Code of Conduct
 
-Please refer to our [Code of Conduct](CODE_OF_CONDUCT.md) for guidelines on participating in this project.
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
