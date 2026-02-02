@@ -1,15 +1,18 @@
 {
-  "name": "parsely-cli",
+  "name": "@sambitcreate/parsely-cli",
   "version": "2.0.0",
   "description": "A smart recipe scraper CLI with interactive TUI built on Ink",
   "type": "module",
-  "main": "src/cli.tsx",
+  "main": "dist/cli.js",
   "bin": {
-    "parsely": "src/cli.tsx"
+    "parsely": "dist/cli.js"
   },
   "scripts": {
     "start": "tsx src/cli.tsx",
     "dev": "tsx watch src/cli.tsx",
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "node dist/cli.js --version",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -21,6 +24,23 @@
     "terminal"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sambitcreate/parsely-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sambitcreate/parsely-cli/issues"
+  },
+  "homepage": "https://github.com/sambitcreate/parsely-cli#readme",
   "dependencies": {
     "ink": "^5.1.0",
     "ink-spinner": "^5.0.0",
@@ -35,5 +55,6 @@
     "typescript": "^5.7.3",
     "tsx": "^4.19.2",
     "@types/react": "^18.3.18"
-  }
+  },
+  "packageManager": "pnpm@10.28.1+sha512.7d7dbbca9e99447b7c3bf7a73286afaaf6be99251eb9498baefa7d406892f67b879adb3a1d7e687fc4ccc1a388c7175fbaae567a26ab44d1067b54fcb0d6a316"
 }
