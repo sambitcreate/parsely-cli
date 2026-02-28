@@ -9,6 +9,7 @@ interface BannerProps {
   phase: AppPhase;
   currentUrl?: string;
   width: number;
+  height: number;
 }
 
 function getPhaseMeta(phase: AppPhase) {
@@ -24,8 +25,8 @@ function getPhaseMeta(phase: AppPhase) {
   }
 }
 
-export function Banner({ phase, currentUrl, width }: BannerProps) {
-  const compact = width < 88;
+export function Banner({ phase, currentUrl, width, height }: BannerProps) {
+  const compact = width < 88 || height < 26;
   const phaseMeta = getPhaseMeta(phase);
   const host = getUrlHost(currentUrl);
 
@@ -36,7 +37,7 @@ export function Banner({ phase, currentUrl, width }: BannerProps) {
       borderStyle="round"
       borderColor={theme.colors.border}
       paddingX={1}
-      paddingY={1}
+      paddingY={0}
       marginBottom={1}
     >
       <Box flexDirection="column">
@@ -46,9 +47,11 @@ export function Banner({ phase, currentUrl, width }: BannerProps) {
         <Text color={theme.colors.text} bold>
           Recipe intelligence in the terminal
         </Text>
-        <Text color={theme.colors.muted}>
-          Browser-first extraction with an AI rescue path when recipe schema is missing.
-        </Text>
+        {!compact && (
+          <Text color={theme.colors.muted}>
+            Browser-first extraction with an AI rescue path when recipe schema is missing.
+          </Text>
+        )}
       </Box>
 
       <Box flexDirection="column" alignItems={compact ? undefined : 'flex-end'} marginTop={compact ? 1 : 0}>
