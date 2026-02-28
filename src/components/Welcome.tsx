@@ -1,16 +1,50 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { Panel } from './Panel.js';
 import { theme } from '../theme.js';
 
-export function Welcome() {
+interface WelcomeProps {
+  compact?: boolean;
+}
+
+export function Welcome({ compact = false }: WelcomeProps) {
   return (
-    <Box flexDirection="column" marginBottom={1} paddingX={1}>
-      <Text color={theme.colors.text}>
-        Paste a recipe URL below to extract ingredients and instructions.
-      </Text>
-      <Text color={theme.colors.muted}>
-        Uses browser scraping with AI fallback for best results.
-      </Text>
+    <Box flexDirection="column">
+      <Panel
+        title="Turn any recipe page into a clean cooking brief."
+        eyebrow="Recipe deck"
+        accentColor={theme.colors.primary}
+      >
+        <Text color={theme.colors.text}>
+          Parsely strips away popups, rambling intros, and clutter so you can focus on timing,
+          ingredients, and steps.
+        </Text>
+      </Panel>
+
+      <Panel
+        title="What happens next"
+        eyebrow="Workflow"
+        accentColor={theme.colors.secondary}
+        marginTop={1}
+      >
+        <Text color={theme.colors.text}>
+          {theme.symbols.bullet} Try JSON-LD and other structured recipe markup first.
+        </Text>
+        <Text color={theme.colors.text}>
+          {theme.symbols.bullet} Fall back to AI only when the page needs rescue.
+        </Text>
+        <Text color={theme.colors.text}>
+          {theme.symbols.bullet} Plate the result in a terminal-friendly cooking layout.
+        </Text>
+
+        {!compact && (
+          <Box marginTop={1}>
+            <Text color={theme.colors.muted}>
+              Tip: most dedicated recipe sites work immediately if they publish Schema.org metadata.
+            </Text>
+          </Box>
+        )}
+      </Panel>
     </Box>
   );
 }

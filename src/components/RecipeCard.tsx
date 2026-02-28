@@ -1,16 +1,16 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { Panel } from './Panel.js';
 import { theme } from '../theme.js';
-import { isoToMinutes, formatMinutes } from '../utils/helpers.js';
+import { getUrlHost, isoToMinutes, formatMinutes } from '../utils/helpers.js';
 import type { Recipe } from '../services/scraper.js';
 
 interface RecipeCardProps {
   recipe: Recipe;
+  width: number;
+  sourceUrl?: string;
 }
 
-/**
- * Extract instruction text from the various formats recipes use.
- */
 function extractInstructions(recipe: Recipe): string[] {
   const raw = recipe.recipeInstructions;
   if (!raw) return [];
@@ -37,91 +37,134 @@ function extractInstructions(recipe: Recipe): string[] {
   return steps;
 }
 
-function TimeField({ label, iso }: { label: string; iso?: string }) {
-  if (!iso) return null;
-  const mins = isoToMinutes(iso);
+function buildOccurrenceKeys(items: string[]): string[] {
+  const counts = new Map<string, number>();
+
+  return items.map((item) => {
+    const count = (counts.get(item) ?? 0) + 1;
+    counts.set(item, count);
+    return `${item}-${count}`;
+  });
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
   return (
-    <Box gap={1}>
-      <Text color={theme.colors.success} bold>
-        {label}
-      </Text>
-      <Text color={theme.colors.text}>
-        {formatMinutes(mins)}
-      </Text>
-      <Text color={theme.colors.muted} dimColor>
-        ({iso})
+    <Box justifyContent="space-between">
+      <Text color={theme.colors.muted}>{label}</Text>
+      <Text color={theme.colors.text} bold>
+        {value}
       </Text>
     </Box>
   );
 }
 
-export function RecipeCard({ recipe }: RecipeCardProps) {
-  const instructions = extractInstructions(recipe);
-  const sourceLabel = recipe.source === 'browser' ? 'JSON-LD' : 'AI Fallback';
+function TimeField({ label, iso }: { label: string; iso?: string }) {
+  if (!iso) return null;
+  const mins = isoToMinutes(iso);
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={theme.colors.secondary}
-      paddingX={1}
-      paddingY={1}
-    >
-      {/* Header */}
-      <Box marginBottom={1}>
-        <Text bold color={theme.colors.secondary}>
-          Recipe Extract
-        </Text>
-        <Text color={theme.colors.muted}>
-          {' '}({sourceLabel})
-        </Text>
+    <Box flexDirection="column" marginBottom={1}>
+      <Text color={theme.colors.muted}>{label}</Text>
+      <Text color={theme.colors.text} bold>
+        {formatMinutes(mins)}
+      </Text>
+      <Text color={theme.colors.subtle}>
+        {iso}
+      </Text>
+    </Box>
+  );
+}
+
+export function RecipeCard({ recipe, width, sourceUrl }: RecipeCardProps) {
+  const instructions = extractInstructions(recipe);
+  const ingredients = recipe.recipeIngredient ?? [];
+  const ingredientKeys = buildOccurrenceKeys(ingredients);
+  const instructionKeys = buildOccurrenceKeys(instructions);
+  const sourceLabel = recipe.source === 'browser' ? 'Schema found on page' : 'Recovered with AI';
+  const sourceColor = recipe.source === 'browser' ? theme.colors.primary : theme.colors.accent;
+  const wide = width >= 108;
+
+  return (
+    <Box flexDirection="column" flexGrow={1}>
+      <Panel
+        title={recipe.name ?? 'Untitled recipe'}
+        eyebrow="Recipe deck"
+        accentColor={sourceColor}
+        marginBottom={1}
+      >
+        <Box flexDirection={wide ? 'row' : 'column'} justifyContent="space-between">
+          <Box flexDirection="column">
+            <Text color={sourceColor} bold>
+              {sourceLabel}
+            </Text>
+            {sourceUrl && (
+              <Text color={theme.colors.muted}>
+                {getUrlHost(sourceUrl)}
+              </Text>
+            )}
+          </Box>
+
+          <Box marginTop={wide ? 0 : 1} flexDirection={wide ? 'row' : 'column'} gap={2}>
+            <StatRow label="Ingredients" value={String(ingredients.length)} />
+            <StatRow label="Steps" value={String(instructions.length)} />
+          </Box>
+        </Box>
+      </Panel>
+
+      <Box flexDirection={wide ? 'row' : 'column'} gap={1} flexGrow={1}>
+        <Panel
+          title="Ingredients and timing"
+          eyebrow="Prep"
+          accentColor={theme.colors.secondary}
+          width={wide ? '36%' : undefined}
+          flexGrow={wide ? 0 : 1}
+        >
+          <TimeField label="Prep time" iso={recipe.prepTime} />
+          <TimeField label="Cook time" iso={recipe.cookTime} />
+          <TimeField label="Total time" iso={recipe.totalTime} />
+
+          {ingredients.length > 0 ? (
+            <Box flexDirection="column">
+              {ingredients.map((item, index) => (
+                <Text key={ingredientKeys[index]} color={theme.colors.text} wrap="wrap">
+                  {theme.symbols.bullet} {item}
+                </Text>
+              ))}
+            </Box>
+          ) : (
+            <Text color={theme.colors.muted}>
+              No ingredients were detected.
+            </Text>
+          )}
+        </Panel>
+
+        <Panel
+          title="Method"
+          eyebrow="Cook"
+          accentColor={theme.colors.info}
+          flexGrow={1}
+        >
+          {instructions.length > 0 ? (
+            <Box flexDirection="column">
+              {instructions.map((step, index) => (
+                <Box key={instructionKeys[index]} marginBottom={1}>
+                  <Text color={theme.colors.info} bold>
+                    {String(index + 1).padStart(2, '0')}
+                  </Text>
+                  <Text color={theme.colors.muted}>  </Text>
+                  <Text color={theme.colors.text} wrap="wrap">
+                    {step}
+                  </Text>
+                </Box>
+              ))}
+            </Box>
+          ) : (
+            <Text color={theme.colors.muted}>
+              No instructions were detected.
+            </Text>
+          )}
+        </Panel>
       </Box>
-
-      {/* Recipe name */}
-      {recipe.name && (
-        <Box marginBottom={1}>
-          <Text bold color={theme.colors.text}>
-            {recipe.name}
-          </Text>
-        </Box>
-      )}
-
-      {/* Times */}
-      {(recipe.prepTime || recipe.cookTime || recipe.totalTime) && (
-        <Box flexDirection="column" marginBottom={1}>
-          <TimeField label="Prep Time " iso={recipe.prepTime} />
-          <TimeField label="Cook Time " iso={recipe.cookTime} />
-          <TimeField label="Total Time" iso={recipe.totalTime} />
-        </Box>
-      )}
-
-      {/* Ingredients */}
-      {recipe.recipeIngredient && recipe.recipeIngredient.length > 0 && (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text bold color={theme.colors.accent}>
-            Ingredients
-          </Text>
-          {recipe.recipeIngredient.map((item, i) => (
-            <Text key={i} color={theme.colors.text}>
-              {'  '}{theme.symbols.bullet} {item}
-            </Text>
-          ))}
-        </Box>
-      )}
-
-      {/* Instructions */}
-      {instructions.length > 0 && (
-        <Box flexDirection="column">
-          <Text bold color={theme.colors.info}>
-            Instructions
-          </Text>
-          {instructions.map((step, i) => (
-            <Text key={i} color={theme.colors.text} wrap="wrap">
-              {'  '}{i + 1}. {step}
-            </Text>
-          ))}
-        </Box>
-      )}
     </Box>
   );
 }

@@ -42,6 +42,16 @@ export function loadConfig(): { openaiApiKey?: string } {
   };
 }
 
+export function getUrlHost(url?: string): string {
+  if (!url) return '';
+
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 /**
  * Basic URL validation.
  */

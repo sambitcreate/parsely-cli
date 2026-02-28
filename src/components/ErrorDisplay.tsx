@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { Panel } from './Panel.js';
 import { theme } from '../theme.js';
 
 interface ErrorDisplayProps {
@@ -8,27 +9,26 @@ interface ErrorDisplayProps {
 
 export function ErrorDisplay({ message }: ErrorDisplayProps) {
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={theme.colors.error}
-      paddingX={1}
-      paddingY={1}
+    <Panel
+      title="Scrape failed"
+      eyebrow="Recovery"
+      accentColor={theme.colors.error}
       marginBottom={1}
     >
       <Text bold color={theme.colors.error}>
-        {theme.symbols.cross} Scraping Failed
+        {theme.symbols.cross} {message}
       </Text>
-      <Box marginTop={1} marginLeft={2}>
-        <Text color={theme.colors.text} wrap="wrap">
-          {message}
+      <Box marginTop={1} flexDirection="column">
+        <Text color={theme.colors.text}>
+          {theme.symbols.bullet} Double-check that the URL points to a specific recipe page.
+        </Text>
+        <Text color={theme.colors.text}>
+          {theme.symbols.bullet} Install Chrome or Chromium for the browser-first path.
+        </Text>
+        <Text color={theme.colors.text}>
+          {theme.symbols.bullet} Add `OPENAI_API_KEY` to `.env.local` if you want AI fallback enabled.
         </Text>
       </Box>
-      <Box marginTop={1} marginLeft={2}>
-        <Text color={theme.colors.muted}>
-          Check the URL and try again, or ensure your .env.local has a valid OPENAI_API_KEY.
-        </Text>
-      </Box>
-    </Box>
+    </Panel>
   );
 }

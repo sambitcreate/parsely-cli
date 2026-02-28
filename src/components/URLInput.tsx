@@ -34,14 +34,21 @@ export function URLInput({ onSubmit }: URLInputProps) {
 
   return (
     <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text color={theme.colors.muted}>
+          Paste a recipe URL or type a hostname. Parsely will add `https://` when needed.
+        </Text>
+      </Box>
       <Box
         borderStyle="round"
         borderColor={theme.colors.borderFocus}
         paddingX={1}
+        paddingY={0}
       >
         <Text color={theme.colors.primary} bold>
-          {'\u276F '}
+          URL
         </Text>
+        <Text color={theme.colors.muted}> </Text>
         <TextInput
           value={value}
           onChange={(v) => {
@@ -51,6 +58,11 @@ export function URLInput({ onSubmit }: URLInputProps) {
           onSubmit={handleSubmit}
           placeholder="Enter recipe URL..."
         />
+      </Box>
+      <Box marginTop={1}>
+        <Text color={theme.colors.muted}>
+          Press enter to scrape. Try a specific recipe page, not a site homepage.
+        </Text>
       </Box>
       {error && (
         <Box marginLeft={2} marginTop={0}>

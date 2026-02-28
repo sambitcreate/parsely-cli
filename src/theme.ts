@@ -1,23 +1,25 @@
 /**
  * Parsely CLI theme - color palette and symbols for the TUI.
- * Inspired by OpenCode's semantic theming approach.
+ * Tuned for a warm, food-forward terminal UI.
  */
 
 export const theme = {
   colors: {
-    primary: '#00d4aa',
-    secondary: '#ff6b9d',
-    accent: '#ffd93d',
-    text: '#e0e0e0',
-    muted: '#6272a4',
-    error: '#ff5555',
-    success: '#50fa7b',
-    warning: '#f1fa8c',
-    info: '#8be9fd',
-    banner: '#50fa7b',
-    border: '#6272a4',
-    borderFocus: '#00d4aa',
-    label: '#bd93f9',
+    primary: '#86c06c',
+    secondary: '#ffbf69',
+    accent: '#ff7f50',
+    text: '#f6f2ea',
+    muted: '#97a3b0',
+    subtle: '#536170',
+    error: '#ff6b6b',
+    success: '#7bd389',
+    warning: '#ffd166',
+    info: '#6ec5ff',
+    banner: '#f6f2ea',
+    border: '#3a4654',
+    borderFocus: '#86c06c',
+    label: '#ffbf69',
+    chip: '#24303b',
   },
   symbols: {
     bullet: '\u2022',
@@ -27,6 +29,9 @@ export const theme = {
     dot: '\u00B7',
     ellipsis: '\u2026',
     line: '\u2500',
+    active: '\u25c9',
+    pending: '\u25cb',
+    skip: '\u2212',
   },
 } as const;
 
