@@ -104,7 +104,10 @@ function findChrome(): string | null {
 /*  Scraping strategies                                                */
 /* ------------------------------------------------------------------ */
 
-async function scrapeWithBrowser(url: string): Promise<Recipe | null> {
+async function scrapeWithBrowser(
+  url: string,
+  onStatus?: (status: ScrapeStatus) => void,
+): Promise<Recipe | null> {
   const chromePath = findChrome();
   if (!chromePath) return null; // No browser available – skip to AI
 
@@ -118,6 +121,7 @@ async function scrapeWithBrowser(url: string): Promise<Recipe | null> {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 10_000 });
     const html = await page.content();
+    onStatus?.({ phase: 'parsing', message: 'Scanning recipe schema and JSON-LD blocks…' });
     await browser.close();
     browser = null;
 
@@ -185,7 +189,7 @@ export async function scrapeRecipe(
 ): Promise<Recipe> {
   // Phase 1 – browser scraping
   onStatus({ phase: 'browser', message: 'Launching browser\u2026' });
-  const browserResult = await scrapeWithBrowser(url);
+  const browserResult = await scrapeWithBrowser(url, onStatus);
 
   if (browserResult) {
     onStatus({ phase: 'done', message: 'Recipe found!', recipe: browserResult });
