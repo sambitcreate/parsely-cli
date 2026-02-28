@@ -4,7 +4,7 @@ This file provides context for AI assistants (Claude, Copilot, etc.) working on 
 
 ## Project Overview
 
-Parsely CLI is a terminal-based recipe scraper that extracts structured data (ingredients, instructions, cook times) from recipe URLs. It features an interactive TUI built with Ink (React for CLIs).
+Parsely CLI is a terminal-based recipe scraper that extracts structured data (ingredients, instructions, cook times) from recipe URLs. It features an interactive Ink TUI with a full-height app shell, responsive panels, and alternate-screen terminal behavior.
 
 ## Tech Stack
 
@@ -29,40 +29,52 @@ idle → scraping → display
          display → idle (new recipe)
 ```
 
+The state machine still drives the app, but the screen layout now changes per phase instead of swapping a single centered card.
+
 ### Component Tree
 
 ```
 <App>
-  <Banner />                    # ASCII art header
-  {idle && <Welcome /> + <URLInput />}
-  {scraping && <ScrapingStatus />}
-  {display && <RecipeCard /> + success message}
-  {error && <ErrorDisplay /> + <URLInput />}
-  <Footer />                    # Context-aware keybind hints
+  <Banner />                    # Status-aware shell header
+  {idle && <Welcome /> + <Panel><URLInput /></Panel> + <PhaseRail />}
+  {scraping && <ScrapingStatus /> + <PhaseRail />}
+  {display && <RecipeCard />}
+  {error && <ErrorDisplay /> + <Panel><URLInput /></Panel> + <PhaseRail />}
+  <Footer />                    # Persistent status + keybind hints
 ```
 
 ### Scraping Pipeline
 
 1. **Puppeteer** → Launch headless Chrome → navigate → extract HTML
 2. **Cheerio** → Parse HTML → find `<script type="application/ld+json">` → locate Recipe schema
-3. **OpenAI fallback** → Send URL to `gpt-4o-mini` → parse JSON response
+3. **Parsing status** → Report a dedicated `parsing` phase back to the UI
+4. **OpenAI fallback** → Send URL to `gpt-4o-mini` → parse JSON response
+
+### Terminal Behavior
+
+- `useTerminalViewport()` reads live terminal width/height from Ink stdout and updates layout on resize
+- The hook enters the terminal alternate screen on mount and restores the previous screen on unmount
+- The app shell uses `width="100%"` and the current terminal row count so Ink fills the viewport
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/cli.tsx` | Entry point — parses `--help`, `--version`, optional URL arg |
-| `src/app.tsx` | Root component — state machine, orchestrates phases |
+| `src/app.tsx` | Root component — app shell, layout switching, orchestrates phases |
 | `src/theme.ts` | Color palette, symbols — single source of truth for styling |
 | `src/services/scraper.ts` | All scraping logic — Puppeteer, Cheerio, OpenAI |
-| `src/utils/helpers.ts` | ISO duration parser, URL validation, env config |
-| `src/components/Banner.tsx` | ASCII art logo |
+| `src/utils/helpers.ts` | ISO duration parser, URL validation, env config, URL host formatting |
+| `src/hooks/useTerminalViewport.ts` | Terminal resize tracking and alternate-screen lifecycle |
+| `src/components/Banner.tsx` | Shell header with status badge and current host |
+| `src/components/Panel.tsx` | Shared bordered panel primitive |
+| `src/components/PhaseRail.tsx` | Pipeline view for browser, parsing, and AI stages |
 | `src/components/URLInput.tsx` | Bordered text input with validation |
-| `src/components/RecipeCard.tsx` | Recipe display card — times, ingredients, instructions |
-| `src/components/ScrapingStatus.tsx` | Animated spinner with phase messages |
-| `src/components/Footer.tsx` | Dynamic keybind hints based on current phase |
-| `src/components/Welcome.tsx` | Welcome text shown on first load |
-| `src/components/ErrorDisplay.tsx` | Error panel with guidance |
+| `src/components/RecipeCard.tsx` | Responsive recipe deck — summary, timing, ingredients, instructions |
+| `src/components/ScrapingStatus.tsx` | Live status panel with animated spinner and stage messaging |
+| `src/components/Footer.tsx` | Status line and dynamic keybind hints based on current phase |
+| `src/components/Welcome.tsx` | Idle-phase onboarding panels |
+| `src/components/ErrorDisplay.tsx` | Error recovery panel with troubleshooting guidance |
 
 ## Development Commands
 
@@ -82,7 +94,9 @@ npm run typecheck      # Type-check without emitting
 
 - **Ink over raw ANSI** — Declarative React components are easier to maintain than imperative terminal output. Ink uses Yoga (Flexbox) for layout.
 - **Phase-based state** — A simple state machine (`idle | scraping | display | error`) keeps the UI predictable.
+- **Alternate screen shell** — Parsely behaves like a focused terminal app, not a command that leaves the UI in shell history. It restores the previous terminal screen on exit.
 - **Callback-driven scraping** — The scraper accepts an `onStatus` callback so the TUI can show real-time progress without polling.
+- **Explicit pipeline UI** — Browser fetch, parsing, and AI fallback are surfaced as distinct stages so users can see which path produced the recipe.
 - **Puppeteer first, AI second** — Browser scraping is more reliable and doesn't require an API key. AI is the fallback, not the default. Uses `puppeteer-core` with auto-detection of system Chrome to avoid a heavy Chromium download.
 - **Theme module** — All colors are centralized in `theme.ts` for easy customization and consistency.
 - **ESM throughout** — The project uses ES modules (`"type": "module"`) for compatibility with Ink v5 which is ESM-only.
@@ -93,18 +107,20 @@ npm run typecheck      # Type-check without emitting
 
 1. Create `src/components/MyComponent.tsx`
 2. Import theme: `import { theme } from '../theme.js';`
-3. Use Ink primitives: `<Box>`, `<Text>`, `useInput()`, `useApp()`
-4. Import in `src/app.tsx` and add to the appropriate phase
+3. Prefer composing with `Panel` for bordered surfaces before introducing a new one-off container
+4. Use Ink primitives: `<Box>`, `<Text>`, `useInput()`, `useApp()`
+5. Import in `src/app.tsx` and add to the appropriate phase/layout
 
 ### Adding a new scraping strategy
 
 1. Add the function to `src/services/scraper.ts`
 2. Call it from `scrapeRecipe()` with appropriate `onStatus()` updates
 3. Return a `Recipe` object with the `source` field set
+4. Update `PhaseRail` if the strategy should appear as a user-visible stage
 
 ### Modifying the theme
 
-Edit `src/theme.ts` — all components reference this module, so changes propagate everywhere.
+Edit `src/theme.ts` — all components reference this module, so changes propagate everywhere. Keep colors warm and high-contrast enough for terminal rendering.
 
 ## Testing
 
