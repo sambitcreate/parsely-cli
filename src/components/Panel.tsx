@@ -21,7 +21,7 @@ export function Panel({
       borderStyle="round"
       borderColor={accentColor}
       paddingX={1}
-      paddingY={1}
+      paddingY={0}
       {...boxProps}
     >
       {(eyebrow || title) && (
