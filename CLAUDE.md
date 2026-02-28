@@ -52,9 +52,10 @@ The state machine still drives the app, but the screen layout now changes per ph
 
 ### Terminal Behavior
 
+- `src/cli.tsx` enters the terminal alternate screen before rendering Ink and restores it after exit
 - `useTerminalViewport()` reads live terminal width/height from Ink stdout and updates layout on resize
-- The hook enters the terminal alternate screen on mount and restores the previous screen on unmount
-- The app shell uses `width="100%"` and the current terminal row count so Ink fills the viewport
+- `src/app.tsx` collapses non-essential panels on shorter terminals so the URL input remains visible and usable
+- `src/components/URLInput.tsx` strips pasted CR/LF characters and treats `Enter` as submit even when the paste stream is messy
 
 ### Key Files
 
@@ -65,11 +66,11 @@ The state machine still drives the app, but the screen layout now changes per ph
 | `src/theme.ts` | Color palette, symbols — single source of truth for styling |
 | `src/services/scraper.ts` | All scraping logic — Puppeteer, Cheerio, OpenAI |
 | `src/utils/helpers.ts` | ISO duration parser, URL validation, env config, URL host formatting |
-| `src/hooks/useTerminalViewport.ts` | Terminal resize tracking and alternate-screen lifecycle |
+| `src/hooks/useTerminalViewport.ts` | Terminal resize tracking |
 | `src/components/Banner.tsx` | Shell header with status badge and current host |
 | `src/components/Panel.tsx` | Shared bordered panel primitive |
 | `src/components/PhaseRail.tsx` | Pipeline view for browser, parsing, and AI stages |
-| `src/components/URLInput.tsx` | Bordered text input with validation |
+| `src/components/URLInput.tsx` | Bordered text input with validation and newline-safe submit handling |
 | `src/components/RecipeCard.tsx` | Responsive recipe deck — summary, timing, ingredients, instructions |
 | `src/components/ScrapingStatus.tsx` | Live status panel with animated spinner and stage messaging |
 | `src/components/Footer.tsx` | Status line and dynamic keybind hints based on current phase |
@@ -94,9 +95,10 @@ npm run typecheck      # Type-check without emitting
 
 - **Ink over raw ANSI** — Declarative React components are easier to maintain than imperative terminal output. Ink uses Yoga (Flexbox) for layout.
 - **Phase-based state** — A simple state machine (`idle | scraping | display | error`) keeps the UI predictable.
-- **Alternate screen shell** — Parsely behaves like a focused terminal app, not a command that leaves the UI in shell history. It restores the previous terminal screen on exit.
+- **Alternate screen shell** — Parsely behaves like a focused terminal app, not a command that leaves the UI in shell history. The screen switch is handled in `src/cli.tsx`, outside the React tree, to avoid corrupting Ink's render cycle.
 - **Callback-driven scraping** — The scraper accepts an `onStatus` callback so the TUI can show real-time progress without polling.
 - **Explicit pipeline UI** — Browser fetch, parsing, and AI fallback are surfaced as distinct stages so users can see which path produced the recipe.
+- **Defensive input handling** — URL submission is handled locally in `URLInput`, with CR/LF sanitization so paste-plus-enter works reliably in real terminals.
 - **Puppeteer first, AI second** — Browser scraping is more reliable and doesn't require an API key. AI is the fallback, not the default. Uses `puppeteer-core` with auto-detection of system Chrome to avoid a heavy Chromium download.
 - **Theme module** — All colors are centralized in `theme.ts` for easy customization and consistency.
 - **ESM throughout** — The project uses ES modules (`"type": "module"`) for compatibility with Ink v5 which is ESM-only.

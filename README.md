@@ -37,8 +37,9 @@ Without this, browser scraping still works for most recipe sites.
 ## Terminal UI
 
 - Uses an Ink-based full-height app shell instead of printing one-off output
-- Switches into the terminal alternate screen while Parsely is running and restores the previous screen on exit
+- Switches into the terminal alternate screen from the CLI entrypoint and restores the previous screen on exit
 - Adapts the layout to the current terminal size for wide and narrow viewports
+- Collapses non-essential panels on shorter terminals so the URL field stays usable
 - Shows a live scraping pipeline so browser parsing and AI fallback are visible as separate stages
 
 ## Keyboard Shortcuts
@@ -101,9 +102,10 @@ npm run dev
 - `Banner` — status-aware header with current host and app state
 - `Panel` — shared bordered container used across the app shell
 - `PhaseRail` — pipeline view for browser, parsing, and AI stages
+- `URLInput` — normalizes pasted newlines and submits on `Enter`
 - `RecipeCard` — split recipe layout with summary, ingredients, timing, and method
 - `Footer` — persistent status line and key hints
-- `useTerminalViewport` — terminal sizing plus alternate-screen enter/exit behavior
+- `useTerminalViewport` — terminal sizing and resize tracking
 
 ### Build & Publish
 
