@@ -1,9 +1,6 @@
 import { useStdout } from 'ink';
 import { useEffect, useState } from 'react';
 
-const ENTER_ALT_SCREEN = '\u001B[?1049h\u001B[2J\u001B[H\u001B[?25l';
-const EXIT_ALT_SCREEN = '\u001B[?25h\u001B[?1049l';
-
 interface Viewport {
   width: number;
   height: number;
@@ -30,16 +27,6 @@ export function useTerminalViewport() {
 
     return () => {
       stdout.off('resize', onResize);
-    };
-  }, [stdout]);
-
-  useEffect(() => {
-    if (!stdout.isTTY) return;
-
-    stdout.write(ENTER_ALT_SCREEN);
-
-    return () => {
-      stdout.write(EXIT_ALT_SCREEN);
     };
   }, [stdout]);
 
