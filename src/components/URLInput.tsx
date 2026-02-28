@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { theme } from '../theme.js';
 import { isValidUrl } from '../utils/helpers.js';
@@ -32,6 +32,23 @@ export function URLInput({ onSubmit }: URLInputProps) {
     onSubmit(url);
   };
 
+  const handleChange = (nextValue: string) => {
+    const sanitized = nextValue.replace(/[\r\n]+/g, '');
+
+    setValue(sanitized);
+    if (error) setError('');
+
+    if (sanitized !== nextValue && sanitized.trim()) {
+      handleSubmit(sanitized);
+    }
+  };
+
+  useInput((_input, key) => {
+    if (key.return) {
+      handleSubmit(value);
+    }
+  });
+
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
@@ -51,11 +68,8 @@ export function URLInput({ onSubmit }: URLInputProps) {
         <Text color={theme.colors.muted}> </Text>
         <TextInput
           value={value}
-          onChange={(v) => {
-            setValue(v);
-            if (error) setError('');
-          }}
-          onSubmit={handleSubmit}
+          focus={true}
+          onChange={handleChange}
           placeholder="Enter recipe URL..."
         />
       </Box>
