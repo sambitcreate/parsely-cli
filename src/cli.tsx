@@ -3,6 +3,9 @@ import React from 'react';
 import { render } from 'ink';
 import { App } from './app.js';
 
+const ENTER_ALT_SCREEN = '\u001B[?1049h\u001B[2J\u001B[H';
+const EXIT_ALT_SCREEN = '\u001B[?1049l';
+
 // Simple arg parsing – accept an optional recipe URL as the first positional arg
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith('-'));
@@ -35,4 +38,24 @@ if (args.includes('--version') || args.includes('-v')) {
   process.exit(0);
 }
 
-render(<App initialUrl={url} />);
+async function main() {
+  const useAltScreen = process.stdout.isTTY;
+
+  if (useAltScreen) {
+    process.stdout.write(ENTER_ALT_SCREEN);
+  }
+
+  try {
+    const instance = render(<App initialUrl={url} />);
+    await instance.waitUntilExit();
+  } finally {
+    if (useAltScreen) {
+      process.stdout.write(EXIT_ALT_SCREEN);
+    }
+  }
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});
