@@ -28,6 +28,8 @@ export function App({ initialUrl }: AppProps) {
 
   const wide = width >= 112;
   const roomy = width >= 86;
+  const shortViewport = height < 30;
+  const tightViewport = height < 24;
 
   const handleScrape = useCallback(async (url: string) => {
     setCurrentUrl(url);
@@ -62,21 +64,22 @@ export function App({ initialUrl }: AppProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useInput((input, key) => {
-    if (phase === 'display') {
-      if (input === 'n') handleNewRecipe();
-      if (input === 'q') exit();
-    }
-
-    if (key.escape && phase === 'display') {
-      exit();
-    }
-  });
+    if (input === 'n') handleNewRecipe();
+    if (input === 'q' || key.escape) exit();
+  }, { isActive: phase === 'display' });
 
   const renderIdle = () => (
-    <Box flexDirection={wide ? 'row' : 'column'} gap={1} flexGrow={1}>
-      <Box flexDirection="column" width={wide ? '58%' : undefined}>
-        <Welcome compact={!roomy} />
-        <Panel title="Paste a recipe URL" eyebrow="Ready" accentColor={theme.colors.primary} marginTop={1}>
+    <Box flexDirection={wide && !shortViewport ? 'row' : 'column'} gap={1} flexGrow={1}>
+      <Box flexDirection="column" width={wide && !shortViewport ? '58%' : undefined}>
+        {!tightViewport && (
+          <Welcome compact={!roomy || shortViewport} minimal={shortViewport} />
+        )}
+        <Panel
+          title="Paste a recipe URL"
+          eyebrow="Ready"
+          accentColor={theme.colors.primary}
+          marginTop={tightViewport ? 0 : 1}
+        >
           <URLInput onSubmit={handleScrape} />
         </Panel>
       </Box>
@@ -85,37 +88,41 @@ export function App({ initialUrl }: AppProps) {
         <Panel title="Parsing pipeline" eyebrow="Browser first" accentColor={theme.colors.secondary}>
           <PhaseRail phase={phase} />
         </Panel>
-        <Panel title="Best targets" eyebrow="Tips" accentColor={theme.colors.info} marginTop={1}>
-          <Text color={theme.colors.text}>
-            {theme.symbols.bullet} Dedicated recipe pages with ingredient lists and cook times.
-          </Text>
-          <Text color={theme.colors.text}>
-            {theme.symbols.bullet} Sites that publish Schema.org Recipe metadata.
-          </Text>
-          <Text color={theme.colors.text}>
-            {theme.symbols.bullet} Pages that work in a normal browser without a login wall.
-          </Text>
-        </Panel>
+        {!shortViewport && (
+          <Panel title="Best targets" eyebrow="Tips" accentColor={theme.colors.info} marginTop={1}>
+            <Text color={theme.colors.text}>
+              {theme.symbols.bullet} Dedicated recipe pages with ingredient lists and cook times.
+            </Text>
+            <Text color={theme.colors.text}>
+              {theme.symbols.bullet} Sites that publish Schema.org Recipe metadata.
+            </Text>
+            <Text color={theme.colors.text}>
+              {theme.symbols.bullet} Pages that work in a normal browser without a login wall.
+            </Text>
+          </Panel>
+        )}
       </Box>
     </Box>
   );
 
   const renderScraping = () => (
-    <Box flexDirection={wide ? 'row' : 'column'} gap={1} flexGrow={1}>
+    <Box flexDirection={wide && !shortViewport ? 'row' : 'column'} gap={1} flexGrow={1}>
       {scrapeStatus && (
         <ScrapingStatus status={scrapeStatus} width={width} />
       )}
 
-      <Box flexDirection="column" width={wide ? '36%' : undefined}>
+      <Box flexDirection="column" width={wide && !shortViewport ? '36%' : undefined}>
         <Panel title="Pipeline" eyebrow="Live view" accentColor={theme.colors.secondary}>
           <PhaseRail phase={phase} status={scrapeStatus} recipe={recipe} />
         </Panel>
-        <Panel title="Fallback policy" eyebrow="Cost control" accentColor={theme.colors.info} marginTop={1}>
-          <Text color={theme.colors.text}>
-            Parsely keeps the fast path cheap: it only spends tokens when the page does not expose
-            enough usable recipe structure.
-          </Text>
-        </Panel>
+        {!shortViewport && (
+          <Panel title="Fallback policy" eyebrow="Cost control" accentColor={theme.colors.info} marginTop={1}>
+            <Text color={theme.colors.text}>
+              Parsely keeps the fast path cheap: it only spends tokens when the page does not expose
+              enough usable recipe structure.
+            </Text>
+          </Panel>
+        )}
       </Box>
     </Box>
   );
@@ -129,8 +136,8 @@ export function App({ initialUrl }: AppProps) {
   );
 
   const renderError = () => (
-    <Box flexDirection={wide ? 'row' : 'column'} gap={1} flexGrow={1}>
-      <Box flexDirection="column" width={wide ? '58%' : undefined}>
+    <Box flexDirection={wide && !shortViewport ? 'row' : 'column'} gap={1} flexGrow={1}>
+      <Box flexDirection="column" width={wide && !shortViewport ? '58%' : undefined}>
         <ErrorDisplay message={error} />
         <Panel title="Try another URL" eyebrow="Retry" accentColor={theme.colors.primary}>
           <URLInput onSubmit={handleScrape} />
@@ -147,7 +154,7 @@ export function App({ initialUrl }: AppProps) {
 
   return (
     <Box flexDirection="column" width="100%" height={height}>
-      <Banner phase={phase} currentUrl={currentUrl} width={width} />
+      <Banner phase={phase} currentUrl={currentUrl} width={width} height={height} />
 
       <Box flexDirection="column" flexGrow={1}>
         {phase === 'idle' && renderIdle()}
