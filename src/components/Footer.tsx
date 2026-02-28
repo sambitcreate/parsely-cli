@@ -49,6 +49,12 @@ function getStatusCopy(phase: AppPhase): string {
 export function Footer({ phase, width }: FooterProps) {
   const hints = keybinds[phase];
   const compact = width < 92;
+  const statusCopy = compact
+    ? getStatusCopy(phase).replace('Scanning the page and preparing a clean recipe deck.', 'Scanning recipe page.')
+        .replace('Recipe plated. Press n to scrape another page.', 'Recipe plated.')
+        .replace('The scrape failed. Adjust the URL or enable the AI fallback.', 'Scrape failed.')
+        .replace('Ready for a recipe URL.', 'Ready.')
+    : getStatusCopy(phase);
 
   return (
     <Box
@@ -61,7 +67,7 @@ export function Footer({ phase, width }: FooterProps) {
       marginTop={1}
     >
       <Text color={theme.colors.muted}>
-        {getStatusCopy(phase)}
+        {statusCopy}
       </Text>
 
       <Box marginTop={compact ? 1 : 0}>
