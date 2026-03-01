@@ -40,6 +40,7 @@ Without this, browser scraping still works for most recipe sites.
 - Switches into the terminal alternate screen from the CLI entrypoint and restores the previous screen on exit
 - Adapts the layout to the current terminal size for wide and narrow viewports
 - Collapses non-essential panels on shorter terminals so the URL field stays usable
+- Cancels in-flight browser and AI scraping when you press `Ctrl+C`
 - Shows a live scraping pipeline so browser parsing and AI fallback are visible as separate stages
 
 ## Keyboard Shortcuts
@@ -58,6 +59,7 @@ Without this, browser scraping still works for most recipe sites.
 - **Browser scraping skipped** — Install Chrome or Chromium for better results
 - **No recipe found** — AI fallback handles most sites, but results vary by site
 - **Terminal looks cleared while running** — Expected; Parsely uses the alternate screen and restores your previous terminal content when it exits
+- **Some sites challenge headless browsers** — Parsely now uses a more browser-like Puppeteer setup, but challenge pages can still force an AI fallback
 
 ## License
 
@@ -88,6 +90,7 @@ git clone https://github.com/sambitcreate/parsely-cli.git
 cd parsely-cli
 npm install
 npm run dev
+npm test
 ```
 
 ### How It Works
@@ -106,6 +109,14 @@ npm run dev
 - `RecipeCard` — split recipe layout with summary, ingredients, timing, and method
 - `Footer` — persistent status line and key hints
 - `useTerminalViewport` — terminal sizing and resize tracking
+
+### Tests
+
+```bash
+npm test
+```
+
+The test suite covers input normalization and the pure HTML/schema extraction helpers used by the scraper.
 
 ### Build & Publish
 

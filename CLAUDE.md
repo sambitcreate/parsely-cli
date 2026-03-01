@@ -50,12 +50,15 @@ The state machine still drives the app, but the screen layout now changes per ph
 3. **Parsing status** → Report a dedicated `parsing` phase back to the UI
 4. **OpenAI fallback** → Send URL to `gpt-4o-mini` → parse JSON response
 
+The browser path now uses a more browser-like Puppeteer configuration (`userAgent`, `accept-language`, and a small webdriver-masking shim) because some recipe sites return Cloudflare challenges to the default headless setup.
+
 ### Terminal Behavior
 
 - `src/cli.tsx` enters the terminal alternate screen before rendering Ink and restores it after exit
 - `useTerminalViewport()` reads live terminal width/height from Ink stdout and updates layout on resize
 - `src/app.tsx` collapses non-essential panels on shorter terminals so the URL input remains visible and usable
 - `src/components/URLInput.tsx` strips pasted CR/LF characters and treats `Enter` as submit even when the paste stream is messy
+- `src/app.tsx` owns an `AbortController` for the active scrape so `Ctrl+C` can abort browser or AI work before exiting
 
 ### Key Files
 
@@ -76,6 +79,8 @@ The state machine still drives the app, but the screen layout now changes per ph
 | `src/components/Footer.tsx` | Status line and dynamic keybind hints based on current phase |
 | `src/components/Welcome.tsx` | Idle-phase onboarding panels |
 | `src/components/ErrorDisplay.tsx` | Error recovery panel with troubleshooting guidance |
+| `test/helpers.test.ts` | Input normalization and URL validation coverage |
+| `test/scraper.test.ts` | Schema extraction and challenge detection coverage |
 
 ## Development Commands
 
@@ -83,6 +88,7 @@ The state machine still drives the app, but the screen layout now changes per ph
 npm start              # Run the CLI
 npm run dev            # Run with file watching (auto-reload)
 npm run typecheck      # Type-check without emitting
+npm test               # Run helper and scraper unit tests
 ./run.sh               # Quick-start (installs deps if needed)
 ./run.sh <url>         # Scrape a specific URL immediately
 ```
@@ -99,6 +105,8 @@ npm run typecheck      # Type-check without emitting
 - **Callback-driven scraping** — The scraper accepts an `onStatus` callback so the TUI can show real-time progress without polling.
 - **Explicit pipeline UI** — Browser fetch, parsing, and AI fallback are surfaced as distinct stages so users can see which path produced the recipe.
 - **Defensive input handling** — URL submission is handled locally in `URLInput`, with CR/LF sanitization so paste-plus-enter works reliably in real terminals.
+- **Abortable scraping** — The app keeps an `AbortController` per scrape so `Ctrl+C` or unmounting does not leave Puppeteer or OpenAI requests running in the background.
+- **Challenge-aware browser mode** — The browser scraper uses a browser-like fingerprint and challenge detection to avoid falling back to AI on sites that block the default headless signature.
 - **Puppeteer first, AI second** — Browser scraping is more reliable and doesn't require an API key. AI is the fallback, not the default. Uses `puppeteer-core` with auto-detection of system Chrome to avoid a heavy Chromium download.
 - **Theme module** — All colors are centralized in `theme.ts` for easy customization and consistency.
 - **ESM throughout** — The project uses ES modules (`"type": "module"`) for compatibility with Ink v5 which is ESM-only.
@@ -126,6 +134,12 @@ Edit `src/theme.ts` — all components reference this module, so changes propaga
 
 ## Testing
 
-No test suite is currently configured. To add tests, consider:
-- [ink-testing-library](https://github.com/vadimdemedes/ink-testing-library) for component tests
-- Vitest or Jest for unit tests on `helpers.ts` and `scraper.ts`
+Run tests with:
+
+```bash
+npm test
+```
+
+The current suite focuses on pure helpers rather than Ink rendering:
+- `test/helpers.test.ts` covers URL normalization and pasted newline sanitization
+- `test/scraper.test.ts` covers JSON-LD extraction and challenge-page detection
