@@ -42,6 +42,18 @@ export function loadConfig(): { openaiApiKey?: string } {
   };
 }
 
+export function sanitizeSingleLineInput(input: string): string {
+  return input.replace(/[\r\n]+/g, '');
+}
+
+export function normalizeRecipeUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const url = /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return isValidUrl(url) ? url : null;
+}
+
 export function getUrlHost(url?: string): string {
   if (!url) return '';
 
