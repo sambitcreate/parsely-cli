@@ -1,6 +1,6 @@
 # Parsely CLI
 
-A smart recipe scraper for the terminal. It turns a recipe URL into a clean cooking brief with ingredients, timings, steps, and source metadata inside a full-screen terminal UI.
+A smart recipe scraper for the terminal. It turns a recipe URL into a clean cooking brief with ingredients, timings, steps, and source metadata inside a viewport-filling terminal UI.
 
 ## Installation
 
@@ -34,14 +34,23 @@ export OPENAI_API_KEY="your_key_here"
 
 Without this, browser scraping still works for most recipe sites.
 
+Optional terminal tuning:
+
+```bash
+export PARSELY_SYNC_OUTPUT=1   # force synchronized output on
+export PARSELY_SYNC_OUTPUT=0   # force synchronized output off
+```
+
 ## Terminal UI
 
-- Uses an Ink-based full-height app shell instead of printing one-off output
+- Uses an Ink-based app shell instead of printing one-off output
 - Switches into the terminal alternate screen from the CLI entrypoint and restores the previous screen on exit
+- Reserves one terminal row so Ink can update incrementally instead of clearing the whole screen on every spinner tick
 - Adapts the layout to the current terminal size for wide and narrow viewports
 - Collapses non-essential panels on shorter terminals so the URL field stays usable
 - Cancels in-flight browser and AI scraping when you press `Ctrl+C`
 - Shows a live scraping pipeline so browser parsing and AI fallback are visible as separate stages
+- Enables synchronized output in Ghostty by default so frame updates paint atomically
 
 ## Keyboard Shortcuts
 
@@ -59,6 +68,7 @@ Without this, browser scraping still works for most recipe sites.
 - **Browser scraping skipped** — Install Chrome or Chromium for better results
 - **No recipe found** — AI fallback handles most sites, but results vary by site
 - **Terminal looks cleared while running** — Expected; Parsely uses the alternate screen and restores your previous terminal content when it exits
+- **Ghostty still flickers** — Parsely enables synchronized output automatically in Ghostty; set `PARSELY_SYNC_OUTPUT=1` to force it on elsewhere or `PARSELY_SYNC_OUTPUT=0` to disable it
 - **Some sites challenge headless browsers** — Parsely now uses a more browser-like Puppeteer setup, but challenge pages can still force an AI fallback
 
 ## License
@@ -77,7 +87,8 @@ parsely-cli/
 │   ├── components/          # UI components
 │   ├── hooks/               # Terminal viewport and screen management
 │   ├── services/scraper.ts  # Puppeteer + OpenAI
-│   └── utils/helpers.ts     # Helpers
+│   └── utils/               # Input, URL, and terminal helpers
+├── test/                    # Unit tests for helpers and scraper parsing
 ├── package.json
 ├── tsconfig.json
 └── CLAUDE.md                # AI assistant context
@@ -109,6 +120,7 @@ npm test
 - `RecipeCard` — split recipe layout with summary, ingredients, timing, and method
 - `Footer` — persistent status line and key hints
 - `useTerminalViewport` — terminal sizing and resize tracking
+- `utils/terminal.ts` — synchronized-output and render-height helpers for stable full-screen updates
 
 ### Tests
 
