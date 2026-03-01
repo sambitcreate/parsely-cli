@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { theme } from '../theme.js';
-import { isValidUrl } from '../utils/helpers.js';
+import { normalizeRecipeUrl, sanitizeSingleLineInput } from '../utils/helpers.js';
 
 interface URLInputProps {
   onSubmit: (url: string) => void;
@@ -13,16 +13,13 @@ export function URLInput({ onSubmit }: URLInputProps) {
   const [error, setError] = useState('');
 
   const handleSubmit = (input: string) => {
-    const trimmed = input.trim();
-    if (!trimmed) {
-      setError('Please enter a URL');
-      return;
-    }
+    const url = normalizeRecipeUrl(input);
+    if (!url) {
+      if (!input.trim()) {
+        setError('Please enter a URL');
+        return;
+      }
 
-    // Auto-prepend https:// if missing protocol
-    const url = /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
-
-    if (!isValidUrl(url)) {
       setError('Invalid URL. Please enter a valid recipe URL.');
       return;
     }
@@ -33,7 +30,7 @@ export function URLInput({ onSubmit }: URLInputProps) {
   };
 
   const handleChange = (nextValue: string) => {
-    const sanitized = nextValue.replace(/[\r\n]+/g, '');
+    const sanitized = sanitizeSingleLineInput(nextValue);
 
     setValue(sanitized);
     if (error) setError('');
@@ -42,12 +39,6 @@ export function URLInput({ onSubmit }: URLInputProps) {
       handleSubmit(sanitized);
     }
   };
-
-  useInput((_input, key) => {
-    if (key.return) {
-      handleSubmit(value);
-    }
-  });
 
   return (
     <Box flexDirection="column">
@@ -70,6 +61,7 @@ export function URLInput({ onSubmit }: URLInputProps) {
           value={value}
           focus={true}
           onChange={handleChange}
+          onSubmit={handleSubmit}
           placeholder="Enter recipe URL..."
         />
       </Box>
