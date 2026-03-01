@@ -1,0 +1,67 @@
+const SYNC_OUTPUT_START = '\u001B[?2026h';
+const SYNC_OUTPUT_END = '\u001B[?2026l';
+
+type EnvMap = Record<string, string | undefined>;
+
+export function getRenderableHeight(rows: number): number {
+  if (!Number.isFinite(rows) || rows <= 1) {
+    return 1;
+  }
+
+  return Math.floor(rows) - 1;
+}
+
+export function shouldUseSynchronizedOutput(env: EnvMap = process.env): boolean {
+  if (env['PARSELY_SYNC_OUTPUT'] === '0') {
+    return false;
+  }
+
+  if (env['PARSELY_SYNC_OUTPUT'] === '1') {
+    return true;
+  }
+
+  return env['TERM_PROGRAM'] === 'ghostty';
+}
+
+function wrapChunk(chunk: Uint8Array | string): Uint8Array | string {
+  if (typeof chunk === 'string') {
+    return `${SYNC_OUTPUT_START}${chunk}${SYNC_OUTPUT_END}`;
+  }
+
+  return Buffer.concat([
+    Buffer.from(SYNC_OUTPUT_START),
+    Buffer.from(chunk),
+    Buffer.from(SYNC_OUTPUT_END),
+  ]);
+}
+
+export function createSynchronizedWriteProxy<T extends NodeJS.WriteStream>(stdout: T): T {
+  const originalWrite = stdout.write.bind(stdout);
+
+  return new Proxy(stdout, {
+    get(target, prop) {
+      if (prop !== 'write') {
+        const value = Reflect.get(target, prop, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+
+      return (
+        chunk: Uint8Array | string,
+        encoding?: BufferEncoding | ((error?: Error | null) => void),
+        callback?: (error?: Error | null) => void,
+      ) => {
+        const wrappedChunk = wrapChunk(chunk);
+
+        if (typeof encoding === 'function') {
+          return originalWrite(wrappedChunk, encoding);
+        }
+
+        if (encoding) {
+          return originalWrite(wrappedChunk, encoding, callback);
+        }
+
+        return originalWrite(wrappedChunk, callback);
+      };
+    },
+  });
+}
