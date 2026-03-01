@@ -27,6 +27,16 @@ export interface ScrapeStatus {
   recipe?: Recipe;
 }
 
+const BROWSER_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-blink-features=AutomationControlled',
+];
+
+const BROWSER_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+
 /* ------------------------------------------------------------------ */
 /*  JSON-LD helpers                                                    */
 /* ------------------------------------------------------------------ */
@@ -35,7 +45,7 @@ export interface ScrapeStatus {
  * Walk through JSON-LD script blocks and return the first Recipe object found.
  * Handles direct Recipe type, @graph arrays, and nested lists.
  */
-function findRecipeJson(scripts: string[]): Record<string, unknown> | null {
+export function findRecipeJson(scripts: string[]): Record<string, unknown> | null {
   for (const raw of scripts) {
     let data: unknown;
     try {
@@ -74,6 +84,25 @@ function findRecipeJson(scripts: string[]): Record<string, unknown> | null {
   return null;
 }
 
+export function containsBrowserChallenge(html: string): boolean {
+  return html.includes('cf_chl') ||
+    html.includes('window._cf_chl_opt') ||
+    html.includes('cf-mitigated');
+}
+
+export function extractRecipeFromHtml(html: string): Recipe | null {
+  const $ = cheerio.load(html);
+  const scripts: string[] = [];
+
+  $('script[type="application/ld+json"]').each((_index, element) => {
+    const text = $(element).text();
+    if (text) scripts.push(text);
+  });
+
+  const recipe = findRecipeJson(scripts);
+  return recipe ? ({ ...recipe, source: 'browser' } as Recipe) : null;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Chrome detection                                                   */
 /* ------------------------------------------------------------------ */
@@ -100,6 +129,28 @@ function findChrome(): string | null {
   return null;
 }
 
+function createAbortError(): Error {
+  const error = new Error('Scrape aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+async function configurePage(page: Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>['newPage']>>) {
+  await page.setUserAgent(BROWSER_USER_AGENT);
+  await page.setExtraHTTPHeaders({ 'accept-language': 'en-US,en;q=0.9' });
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Scraping strategies                                                */
 /* ------------------------------------------------------------------ */
@@ -107,43 +158,74 @@ function findChrome(): string | null {
 async function scrapeWithBrowser(
   url: string,
   onStatus?: (status: ScrapeStatus) => void,
+  signal?: AbortSignal,
 ): Promise<Recipe | null> {
+  throwIfAborted(signal);
   const chromePath = findChrome();
   if (!chromePath) return null; // No browser available – skip to AI
 
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+  const onAbort = async () => {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {
+        // Ignore close errors when aborting.
+      }
+    }
+  };
+
+  signal?.addEventListener('abort', onAbort, { once: true });
+
   try {
     browser = await puppeteer.launch({
       headless: true,
       executablePath: chromePath,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: BROWSER_ARGS,
     });
+
+    throwIfAborted(signal);
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 10_000 });
+    await configurePage(page);
+
+    onStatus?.({ phase: 'browser', message: 'Loading recipe page…' });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 5_000 }).catch(() => undefined);
+
+    throwIfAborted(signal);
     const html = await page.content();
+
+    if (containsBrowserChallenge(html)) {
+      onStatus?.({ phase: 'browser', message: 'Browser challenge detected, retrying page parsing…' });
+      await page.waitForFunction(
+        () => !document.documentElement.outerHTML.includes('cf_chl'),
+        { timeout: 5_000 },
+      ).catch(() => undefined);
+    }
+
+    throwIfAborted(signal);
+    const settledHtml = await page.content();
+
     onStatus?.({ phase: 'parsing', message: 'Scanning recipe schema and JSON-LD blocks…' });
     await browser.close();
     browser = null;
+    return extractRecipeFromHtml(settledHtml);
+  } catch (error) {
+    if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw createAbortError();
+    }
 
-    const $ = cheerio.load(html);
-    const scripts: string[] = [];
-    $('script[type="application/ld+json"]').each((_i, el) => {
-      const text = $(el).text();
-      if (text) scripts.push(text);
-    });
-
-    const recipe = findRecipeJson(scripts);
-    if (!recipe) return null;
-    return { ...recipe, source: 'browser' } as Recipe;
-  } catch {
     if (browser) {
       try { await browser.close(); } catch { /* noop */ }
     }
     return null;
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
   }
 }
 
-async function scrapeWithAI(url: string): Promise<Recipe> {
+async function scrapeWithAI(url: string, signal?: AbortSignal): Promise<Recipe> {
+  throwIfAborted(signal);
   const { openaiApiKey } = loadConfig();
   if (!openaiApiKey || openaiApiKey === 'YOUR_API_KEY_HERE') {
     throw new Error(
@@ -165,7 +247,7 @@ async function scrapeWithAI(url: string): Promise<Recipe> {
       { role: 'user', content: `Scrape this recipe: ${url}` },
     ],
     response_format: { type: 'json_object' },
-  });
+  }, { signal });
 
   const content = response.choices[0]?.message?.content;
   if (!content) throw new Error('AI returned empty response');
@@ -186,10 +268,11 @@ async function scrapeWithAI(url: string): Promise<Recipe> {
 export async function scrapeRecipe(
   url: string,
   onStatus: (status: ScrapeStatus) => void,
+  signal?: AbortSignal,
 ): Promise<Recipe> {
   // Phase 1 – browser scraping
   onStatus({ phase: 'browser', message: 'Launching browser\u2026' });
-  const browserResult = await scrapeWithBrowser(url, onStatus);
+  const browserResult = await scrapeWithBrowser(url, onStatus, signal);
 
   if (browserResult) {
     onStatus({ phase: 'done', message: 'Recipe found!', recipe: browserResult });
@@ -200,10 +283,14 @@ export async function scrapeRecipe(
   onStatus({ phase: 'ai', message: 'Falling back to AI scraper\u2026' });
 
   try {
-    const aiResult = await scrapeWithAI(url);
+    const aiResult = await scrapeWithAI(url, signal);
     onStatus({ phase: 'done', message: 'Recipe extracted via AI!', recipe: aiResult });
     return aiResult;
   } catch (error) {
+    if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      throw createAbortError();
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown error occurred';
     onStatus({ phase: 'error', message });
     throw error;
