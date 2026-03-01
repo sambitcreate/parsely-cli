@@ -46,7 +46,7 @@ async function main() {
   }
 
   try {
-    const instance = render(<App initialUrl={url} />);
+    const instance = render(<App initialUrl={url} />, { exitOnCtrlC: false });
     await instance.waitUntilExit();
   } finally {
     if (useAltScreen) {
