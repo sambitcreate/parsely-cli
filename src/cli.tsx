@@ -2,6 +2,7 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './app.js';
+import { createSynchronizedWriteProxy, shouldUseSynchronizedOutput } from './utils/terminal.js';
 
 const ENTER_ALT_SCREEN = '\u001B[?1049h\u001B[2J\u001B[H';
 const EXIT_ALT_SCREEN = '\u001B[?1049l';
@@ -40,13 +41,19 @@ if (args.includes('--version') || args.includes('-v')) {
 
 async function main() {
   const useAltScreen = process.stdout.isTTY;
+  const inkStdout = useAltScreen && shouldUseSynchronizedOutput()
+    ? createSynchronizedWriteProxy(process.stdout)
+    : process.stdout;
 
   if (useAltScreen) {
     process.stdout.write(ENTER_ALT_SCREEN);
   }
 
   try {
-    const instance = render(<App initialUrl={url} />, { exitOnCtrlC: false });
+    const instance = render(<App initialUrl={url} />, {
+      exitOnCtrlC: false,
+      stdout: inkStdout,
+    });
     await instance.waitUntilExit();
   } finally {
     if (useAltScreen) {

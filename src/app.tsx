@@ -12,6 +12,7 @@ import { PhaseRail } from './components/PhaseRail.js';
 import { scrapeRecipe, type Recipe, type ScrapeStatus } from './services/scraper.js';
 import { useTerminalViewport } from './hooks/useTerminalViewport.js';
 import { theme } from './theme.js';
+import { getRenderableHeight } from './utils/terminal.js';
 
 interface AppProps {
   initialUrl?: string;
@@ -20,6 +21,7 @@ interface AppProps {
 export function App({ initialUrl }: AppProps) {
   const { exit } = useApp();
   const { width, height } = useTerminalViewport();
+  const renderHeight = getRenderableHeight(height);
   const [phase, setPhase] = useState<AppPhase>(initialUrl ? 'scraping' : 'idle');
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [scrapeStatus, setScrapeStatus] = useState<ScrapeStatus | null>(null);
@@ -29,8 +31,8 @@ export function App({ initialUrl }: AppProps) {
 
   const wide = width >= 112;
   const roomy = width >= 86;
-  const shortViewport = height < 30;
-  const tightViewport = height < 24;
+  const shortViewport = renderHeight < 30;
+  const tightViewport = renderHeight < 24;
 
   const cancelActiveScrape = useCallback(() => {
     activeScrapeController.current?.abort();
@@ -188,8 +190,8 @@ export function App({ initialUrl }: AppProps) {
   );
 
   return (
-    <Box flexDirection="column" width="100%" height={height}>
-      <Banner phase={phase} currentUrl={currentUrl} width={width} height={height} />
+    <Box flexDirection="column" width="100%" height={renderHeight}>
+      <Banner phase={phase} currentUrl={currentUrl} width={width} height={renderHeight} />
 
       <Box flexDirection="column" flexGrow={1}>
         {phase === 'idle' && renderIdle()}
