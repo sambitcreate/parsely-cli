@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import { Banner } from './components/Banner.js';
 import { URLInput } from './components/URLInput.js';
@@ -25,13 +25,23 @@ export function App({ initialUrl }: AppProps) {
   const [scrapeStatus, setScrapeStatus] = useState<ScrapeStatus | null>(null);
   const [error, setError] = useState('');
   const [currentUrl, setCurrentUrl] = useState(initialUrl ?? '');
+  const activeScrapeController = useRef<AbortController | null>(null);
 
   const wide = width >= 112;
   const roomy = width >= 86;
   const shortViewport = height < 30;
   const tightViewport = height < 24;
 
+  const cancelActiveScrape = useCallback(() => {
+    activeScrapeController.current?.abort();
+    activeScrapeController.current = null;
+  }, []);
+
   const handleScrape = useCallback(async (url: string) => {
+    cancelActiveScrape();
+    const controller = new AbortController();
+    activeScrapeController.current = controller;
+
     setCurrentUrl(url);
     setPhase('scraping');
     setError('');
@@ -40,14 +50,27 @@ export function App({ initialUrl }: AppProps) {
     try {
       const result = await scrapeRecipe(url, (status) => {
         setScrapeStatus(status);
-      });
+      }, controller.signal);
+
+      if (controller.signal.aborted || activeScrapeController.current !== controller) {
+        return;
+      }
+
       setRecipe(result);
       setPhase('display');
     } catch (err) {
+      if (controller.signal.aborted || activeScrapeController.current !== controller) {
+        return;
+      }
+
       setError(err instanceof Error ? err.message : 'Failed to scrape recipe');
       setPhase('error');
+    } finally {
+      if (activeScrapeController.current === controller) {
+        activeScrapeController.current = null;
+      }
     }
-  }, []);
+  }, [cancelActiveScrape]);
 
   const handleNewRecipe = useCallback(() => {
     setPhase('idle');
@@ -63,10 +86,22 @@ export function App({ initialUrl }: AppProps) {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    return () => {
+      cancelActiveScrape();
+    };
+  }, [cancelActiveScrape]);
+
   useInput((input, key) => {
-    if (input === 'n') handleNewRecipe();
-    if (input === 'q' || key.escape) exit();
-  }, { isActive: phase === 'display' });
+    if (key.ctrl && input === 'c') {
+      cancelActiveScrape();
+      exit();
+      return;
+    }
+
+    if (phase === 'display' && input === 'n') handleNewRecipe();
+    if (phase === 'display' && (input === 'q' || key.escape)) exit();
+  }, { isActive: phase === 'display' || phase === 'scraping' || phase === 'idle' || phase === 'error' });
 
   const renderIdle = () => (
     <Box flexDirection={wide && !shortViewport ? 'row' : 'column'} gap={1} flexGrow={1}>
