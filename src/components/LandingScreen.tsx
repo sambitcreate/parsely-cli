@@ -63,6 +63,16 @@ function stripCommonIndent(lines: string[]) {
   return lines.map((line) => line.slice(indent));
 }
 
+function buildOccurrenceKeys(items: string[]) {
+  const counts = new Map<string, number>();
+
+  return items.map((item) => {
+    const count = (counts.get(item) ?? 0) + 1;
+    counts.set(item, count);
+    return `${item}-${count}`;
+  });
+}
+
 function buildLandingArt(): LandingArt {
   const rendered = CFonts.render(
     'Parsely',
@@ -112,9 +122,11 @@ export function LandingScreen({ width, height, onSubmit }: LandingScreenProps) {
   useDisplayPalette(theme.colors.recipePaper);
 
   const art = width >= primaryLandingArt.width + 8 ? primaryLandingArt : compactLandingArt;
+  const artKeys = buildOccurrenceKeys(art.lines);
   const inputWidth = width >= 120 ? 54 : width >= 84 ? 46 : Math.max(28, width - 16);
   const controlsWidth = inputWidth + 8;
   const contentWidth = Math.min(width - 6, Math.max(controlsWidth, art.width));
+  const footerCopy = width >= 52 ? 'ctrl+c exit' : 'ctrl+c';
 
   return (
     <Box flexDirection="column" width="100%" height="100%" paddingX={2} paddingY={1}>
@@ -123,7 +135,7 @@ export function LandingScreen({ width, height, onSubmit }: LandingScreenProps) {
           <Box width="100%" justifyContent="center" marginBottom={2}>
             <Box flexDirection="column" width={art.width}>
               {art.lines.map((line, index) => (
-                <Text key={index} color={logoColor} bold>
+                <Text key={artKeys[index]} color={logoColor} bold>
                   {line}
                 </Text>
               ))}
@@ -136,7 +148,11 @@ export function LandingScreen({ width, height, onSubmit }: LandingScreenProps) {
         </Box>
       </Box>
 
-      <Box height={1} />
+      <Box justifyContent="flex-end">
+        <Text color={theme.colors.recipeMuted} bold>
+          {footerCopy}
+        </Text>
+      </Box>
     </Box>
   );
 }
