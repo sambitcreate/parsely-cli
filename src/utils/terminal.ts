@@ -1,5 +1,7 @@
 const SYNC_OUTPUT_START = '\u001B[?2026h';
 const SYNC_OUTPUT_END = '\u001B[?2026l';
+const OSC = '\u001B]';
+const ST = '\u001B\\';
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -21,6 +23,26 @@ export function shouldUseSynchronizedOutput(env: EnvMap = process.env): boolean 
   }
 
   return env['TERM_PROGRAM'] === 'ghostty';
+}
+
+export function shouldUseDisplayPalette(env: EnvMap = process.env): boolean {
+  if (env['PARSELY_DISPLAY_PALETTE'] === '0') {
+    return false;
+  }
+
+  if (env['PARSELY_DISPLAY_PALETTE'] === '1') {
+    return true;
+  }
+
+  return env['TERM_PROGRAM'] === 'ghostty';
+}
+
+export function setDefaultTerminalBackground(color: string): string {
+  return `${OSC}11;${color}${ST}`;
+}
+
+export function resetDefaultTerminalBackground(): string {
+  return `${OSC}111${ST}`;
 }
 
 function wrapChunk(chunk: Uint8Array | string): Uint8Array | string {

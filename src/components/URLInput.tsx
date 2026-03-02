@@ -6,11 +6,15 @@ import { normalizeRecipeUrl, sanitizeSingleLineInput } from '../utils/helpers.js
 
 interface URLInputProps {
   onSubmit: (url: string) => void;
+  mode?: 'default' | 'landing';
+  width?: number;
 }
 
-export function URLInput({ onSubmit }: URLInputProps) {
+export function URLInput({ onSubmit, mode = 'default', width }: URLInputProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
+  const landing = mode === 'landing';
+  const landingButtonLabel = '  Go  ';
 
   const handleSubmit = (input: string) => {
     const url = normalizeRecipeUrl(input);
@@ -42,36 +46,58 @@ export function URLInput({ onSubmit }: URLInputProps) {
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text color={theme.colors.muted}>
-          Paste a recipe URL or type a hostname. Parsely will add `https://` when needed.
-        </Text>
+      {!landing && (
+        <Box marginBottom={1}>
+          <Text color={theme.colors.muted}>
+            Paste a recipe URL or type a hostname. Parsely will add `https://` when needed.
+          </Text>
+        </Box>
+      )}
+
+      <Box alignItems="center">
+        <Box
+          borderStyle="round"
+          borderColor={landing ? theme.colors.brand : theme.colors.borderFocus}
+          width={width}
+          paddingX={1}
+          paddingY={0}
+        >
+          {!landing && (
+            <>
+              <Text color={theme.colors.primary} bold>
+                URL
+              </Text>
+              <Text color={theme.colors.muted}> </Text>
+            </>
+          )}
+          <TextInput
+            value={value}
+            focus={true}
+            onChange={handleChange}
+            onSubmit={handleSubmit}
+            placeholder={landing ? 'Paste recipe link here' : 'Enter recipe URL...'}
+          />
+        </Box>
+
+        {landing && (
+          <Box marginLeft={1}>
+            <Text backgroundColor={theme.colors.brand} color={theme.colors.recipePaper} bold>
+              {landingButtonLabel}
+            </Text>
+          </Box>
+        )}
       </Box>
-      <Box
-        borderStyle="round"
-        borderColor={theme.colors.borderFocus}
-        paddingX={1}
-        paddingY={0}
-      >
-        <Text color={theme.colors.primary} bold>
-          URL
-        </Text>
-        <Text color={theme.colors.muted}> </Text>
-        <TextInput
-          value={value}
-          focus={true}
-          onChange={handleChange}
-          onSubmit={handleSubmit}
-          placeholder="Enter recipe URL..."
-        />
-      </Box>
-      <Box marginTop={1}>
-        <Text color={theme.colors.muted}>
-          Press enter to scrape. Try a specific recipe page, not a site homepage.
-        </Text>
-      </Box>
+
+      {!landing && (
+        <Box marginTop={1}>
+          <Text color={theme.colors.muted}>
+            Press enter to scrape. Try a specific recipe page, not a site homepage.
+          </Text>
+        </Box>
+      )}
+
       {error && (
-        <Box marginLeft={2} marginTop={0}>
+        <Box marginLeft={landing ? 0 : 2} marginTop={1} justifyContent={landing ? 'center' : undefined}>
           <Text color={theme.colors.error}>
             {theme.symbols.cross} {error}
           </Text>

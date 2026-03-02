@@ -1,9 +1,10 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { Panel } from './Panel.js';
+import BigText from 'ink-big-text';
 import { theme } from '../theme.js';
-import { getUrlHost, isoToMinutes, formatMinutes } from '../utils/helpers.js';
+import { formatMinutes, getUrlHost, isoToMinutes } from '../utils/helpers.js';
 import type { Recipe } from '../services/scraper.js';
+import { useDisplayPalette } from '../hooks/useDisplayPalette.js';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -47,123 +48,265 @@ function buildOccurrenceKeys(items: string[]): string[] {
   });
 }
 
-function StatRow({ label, value }: { label: string; value: string }) {
+function formatTimeValue(iso?: string): string {
+  if (!iso) return 'Not listed';
+  return formatMinutes(isoToMinutes(iso));
+}
+
+function buildRule(width: number, maxWidth: number): string {
+  const length = Math.max(18, Math.min(width, maxWidth));
+  return theme.symbols.line.repeat(length);
+}
+
+function splitTitle(title: string, maxChars: number, maxLines = 3): string[] {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return ['Untitled recipe'];
+  }
+
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (current && next.length > maxChars) {
+      lines.push(current);
+      current = word;
+      continue;
+    }
+
+    current = next;
+  }
+
+  if (current) {
+    lines.push(current);
+  }
+
+  while (lines.length > maxLines) {
+    const last = lines.pop();
+    const prev = lines.pop();
+
+    if (!last || !prev) {
+      break;
+    }
+
+    lines.push(`${prev} ${last}`);
+  }
+
+  return lines;
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <Box justifyContent="space-between">
-      <Text color={theme.colors.muted}>{label}</Text>
-      <Text color={theme.colors.text} bold>
+    <Box flexDirection="column" width={18} marginRight={2} marginBottom={1}>
+      <Text color={theme.colors.recipeMuted} bold>
+        {label}
+      </Text>
+      <Text color={theme.colors.recipeText} bold>
         {value}
       </Text>
     </Box>
   );
 }
 
-function TimeField({ label, iso }: { label: string; iso?: string }) {
-  if (!iso) return null;
-  const mins = isoToMinutes(iso);
+function SidebarCard({
+  title,
+  children,
+}: React.PropsWithChildren<{ title: string }>) {
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.colors.recipeBorder}
+      paddingX={1}
+      paddingY={0}
+      marginBottom={1}
+    >
+      <Text color={theme.colors.recipeBorder} bold>
+        {title}
+      </Text>
+      <Box flexDirection="column" marginTop={1}>
+        {children}
+      </Box>
+    </Box>
+  );
+}
 
+function DetailStack({ label, value }: { label: string; value: string }) {
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Text color={theme.colors.muted}>{label}</Text>
-      <Text color={theme.colors.text} bold>
-        {formatMinutes(mins)}
+      <Text color={theme.colors.recipeMuted} bold>
+        {label}
       </Text>
-      <Text color={theme.colors.subtle}>
-        {iso}
+      <Text color={theme.colors.recipeText} wrap="wrap">
+        {value}
       </Text>
     </Box>
   );
 }
 
 export function RecipeCard({ recipe, width, sourceUrl }: RecipeCardProps) {
+  useDisplayPalette(theme.colors.recipePaper);
+
   const instructions = extractInstructions(recipe);
   const ingredients = recipe.recipeIngredient ?? [];
   const ingredientKeys = buildOccurrenceKeys(ingredients);
   const instructionKeys = buildOccurrenceKeys(instructions);
-  const sourceLabel = recipe.source === 'browser' ? 'Schema found on page' : 'Recovered with AI';
-  const sourceColor = recipe.source === 'browser' ? theme.colors.primary : theme.colors.accent;
-  const wide = width >= 108;
+  const wide = width >= 124;
+  const splitContent = width >= 96;
+  const compact = width < 82;
+  const sourceHost = getUrlHost(sourceUrl) || 'original page';
+  const sourceLabel = recipe.source === 'browser' ? 'Page schema' : 'AI rescue';
+  const sourceCopy = recipe.source === 'browser' ? 'Recovered from page schema' : 'Recovered with AI rescue';
+  const titleLineCount = width >= 132 ? 2 : 3;
+  const titleChars = Math.max(16, Math.ceil((recipe.name ?? 'Untitled recipe').length / titleLineCount) + 4);
+  const titleLines = splitTitle(recipe.name ?? 'Untitled recipe', titleChars, titleLineCount);
+  const heroRule = buildRule(Math.floor(width * (wide ? 0.46 : 0.7)), 62);
+  const sectionRule = buildRule(Math.floor(width * (wide ? 0.5 : 0.82)), 58);
+  const sidebarWidth = wide ? 30 : '100%';
+  const mainWidth = wide ? '68%' : '100%';
+  const showBigTitle = width >= 110;
 
   return (
-    <Box flexDirection="column" flexGrow={1}>
-      <Panel
-        title={recipe.name ?? 'Untitled recipe'}
-        eyebrow="Recipe deck"
-        accentColor={sourceColor}
-        marginBottom={1}
-      >
-        <Box flexDirection={wide ? 'row' : 'column'} justifyContent="space-between">
-          <Box flexDirection="column">
-            <Text color={sourceColor} bold>
-              {sourceLabel}
+    <Box
+      flexDirection="column"
+      width="100%"
+      paddingX={compact ? 1 : 2}
+      paddingY={1}
+    >
+      <Box flexDirection="column" flexGrow={1}>
+        <Text color={theme.colors.recipeMuted} bold>
+          View original recipe
+        </Text>
+        <Text color={theme.colors.recipeSubtle}>
+          {sourceHost}
+        </Text>
+
+        {showBigTitle ? (
+          <Box marginTop={1} flexDirection="column">
+            {titleLines.map((line) => (
+              <BigText
+                key={line}
+                text={line}
+                font="tiny"
+                colors={[theme.colors.recipeText]}
+                lineHeight={0}
+              />
+            ))}
+          </Box>
+        ) : (
+          <Box marginTop={1} flexDirection="column">
+            <Text color={theme.colors.recipeText} bold wrap="wrap">
+              {recipe.name ?? 'Untitled recipe'}
             </Text>
-            {sourceUrl && (
-              <Text color={theme.colors.muted}>
-                {getUrlHost(sourceUrl)}
-              </Text>
-            )}
+          </Box>
+        )}
+
+        <Box marginTop={1}>
+          <Text color={theme.colors.recipeBorder}>{heroRule}</Text>
+        </Box>
+
+        <Box flexDirection={compact ? 'column' : 'row'} marginTop={1} marginBottom={2}>
+          <Metric label="Prep Time" value={formatTimeValue(recipe.prepTime)} />
+          <Metric label="Cook Time" value={formatTimeValue(recipe.cookTime)} />
+          <Metric label="Total Time" value={formatTimeValue(recipe.totalTime)} />
+        </Box>
+
+        <Box flexDirection={wide ? 'row' : 'column'} gap={3} flexGrow={1}>
+          <Box flexDirection="column" flexGrow={1} width={mainWidth}>
+            <Box flexDirection={splitContent ? 'row' : 'column'} gap={3} alignItems="flex-end">
+              <Box width={splitContent ? '38%' : '100%'}>
+                <Text color={theme.colors.recipeBorder} bold>
+                  Ingredients
+                </Text>
+                <Text color={theme.colors.recipeBorder}>
+                  {buildRule(16, 16)}
+                </Text>
+              </Box>
+              <Box width={splitContent ? '62%' : '100%'}>
+                <Text color={theme.colors.recipeMuted} bold>
+                  Instructions
+                </Text>
+                <Text color={theme.colors.recipeSoft}>
+                  {buildRule(22, 22)}
+                </Text>
+              </Box>
+            </Box>
+            <Text color={theme.colors.recipeBorder}>{sectionRule}</Text>
+
+            <Box flexDirection={splitContent ? 'row' : 'column'} gap={4} marginTop={1} flexGrow={1}>
+              <Box flexDirection="column" width={splitContent ? '38%' : '100%'}>
+                {ingredients.length > 0 ? (
+                  ingredients.map((item, index) => (
+                    <Box key={ingredientKeys[index]} marginBottom={1}>
+                      <Text color={theme.colors.recipeBorder} bold>
+                        □
+                      </Text>
+                      <Text color={theme.colors.recipeText}> </Text>
+                      <Text color={theme.colors.recipeText} bold wrap="wrap">
+                        {item}
+                      </Text>
+                    </Box>
+                  ))
+                ) : (
+                  <Text color={theme.colors.recipeMuted}>
+                    No ingredients were detected.
+                  </Text>
+                )}
+              </Box>
+
+              <Box flexDirection="column" width={splitContent ? '62%' : '100%'}>
+                {instructions.length > 0 ? (
+                  instructions.map((step, index) => (
+                    <Box key={instructionKeys[index]} marginBottom={1} flexDirection="row">
+                      <Box width={4}>
+                        <Text color={theme.colors.recipeBorder} bold>
+                          {String(index + 1).padStart(2, '0')}
+                        </Text>
+                      </Box>
+                      <Text color={theme.colors.recipeSubtle} wrap="wrap">
+                        {step}
+                      </Text>
+                    </Box>
+                  ))
+                ) : (
+                  <Text color={theme.colors.recipeMuted}>
+                    No instructions were detected.
+                  </Text>
+                )}
+              </Box>
+            </Box>
           </Box>
 
-          <Box marginTop={wide ? 0 : 1} flexDirection={wide ? 'row' : 'column'} gap={2}>
-            <StatRow label="Ingredients" value={String(ingredients.length)} />
-            <StatRow label="Steps" value={String(instructions.length)} />
+          <Box flexDirection="column" width={sidebarWidth} minWidth={wide ? 30 : undefined} marginTop={wide ? 2 : 0}>
+            <SidebarCard title="Recipe brief">
+              <DetailStack label="Source" value={sourceLabel} />
+              <DetailStack label="Origin" value={sourceHost} />
+              <DetailStack label="Status" value={sourceCopy} />
+            </SidebarCard>
+
+            <SidebarCard title="Kitchen rhythm">
+              <DetailStack label="Ingredients" value={String(ingredients.length)} />
+              <DetailStack label="Steps" value={String(instructions.length)} />
+              <DetailStack label="Timeline" value={formatTimeValue(recipe.totalTime)} />
+            </SidebarCard>
+
+            <SidebarCard title="Next actions">
+              <Text color={theme.colors.recipeText} bold>
+                n
+                <Text color={theme.colors.recipeMuted}> new recipe</Text>
+              </Text>
+              <Text color={theme.colors.recipeText} bold>
+                q
+                <Text color={theme.colors.recipeMuted}> quit</Text>
+              </Text>
+              <Text color={theme.colors.recipeText} bold>
+                esc
+                <Text color={theme.colors.recipeMuted}> back</Text>
+              </Text>
+            </SidebarCard>
           </Box>
         </Box>
-      </Panel>
-
-      <Box flexDirection={wide ? 'row' : 'column'} gap={1} flexGrow={1}>
-        <Panel
-          title="Ingredients and timing"
-          eyebrow="Prep"
-          accentColor={theme.colors.secondary}
-          width={wide ? '36%' : undefined}
-          flexGrow={wide ? 0 : 1}
-        >
-          <TimeField label="Prep time" iso={recipe.prepTime} />
-          <TimeField label="Cook time" iso={recipe.cookTime} />
-          <TimeField label="Total time" iso={recipe.totalTime} />
-
-          {ingredients.length > 0 ? (
-            <Box flexDirection="column">
-              {ingredients.map((item, index) => (
-                <Text key={ingredientKeys[index]} color={theme.colors.text} wrap="wrap">
-                  {theme.symbols.bullet} {item}
-                </Text>
-              ))}
-            </Box>
-          ) : (
-            <Text color={theme.colors.muted}>
-              No ingredients were detected.
-            </Text>
-          )}
-        </Panel>
-
-        <Panel
-          title="Method"
-          eyebrow="Cook"
-          accentColor={theme.colors.info}
-          flexGrow={1}
-        >
-          {instructions.length > 0 ? (
-            <Box flexDirection="column">
-              {instructions.map((step, index) => (
-                <Box key={instructionKeys[index]} marginBottom={1}>
-                  <Text color={theme.colors.info} bold>
-                    {String(index + 1).padStart(2, '0')}
-                  </Text>
-                  <Text color={theme.colors.muted}>  </Text>
-                  <Text color={theme.colors.text} wrap="wrap">
-                    {step}
-                  </Text>
-                </Box>
-              ))}
-            </Box>
-          ) : (
-            <Text color={theme.colors.muted}>
-              No instructions were detected.
-            </Text>
-          )}
-        </Panel>
       </Box>
     </Box>
   );

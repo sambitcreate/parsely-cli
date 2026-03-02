@@ -4,6 +4,9 @@ import { PassThrough } from 'node:stream';
 import {
   createSynchronizedWriteProxy,
   getRenderableHeight,
+  resetDefaultTerminalBackground,
+  setDefaultTerminalBackground,
+  shouldUseDisplayPalette,
   shouldUseSynchronizedOutput,
 } from '../src/utils/terminal.js';
 
@@ -17,6 +20,17 @@ test('shouldUseSynchronizedOutput defaults to Ghostty and honors overrides', () 
   assert.equal(shouldUseSynchronizedOutput({ TERM_PROGRAM: 'ghostty' }), true);
   assert.equal(shouldUseSynchronizedOutput({ TERM_PROGRAM: 'ghostty', PARSELY_SYNC_OUTPUT: '0' }), false);
   assert.equal(shouldUseSynchronizedOutput({ TERM_PROGRAM: 'Apple_Terminal', PARSELY_SYNC_OUTPUT: '1' }), true);
+});
+
+test('shouldUseDisplayPalette defaults to Ghostty and honors overrides', () => {
+  assert.equal(shouldUseDisplayPalette({ TERM_PROGRAM: 'ghostty' }), true);
+  assert.equal(shouldUseDisplayPalette({ TERM_PROGRAM: 'ghostty', PARSELY_DISPLAY_PALETTE: '0' }), false);
+  assert.equal(shouldUseDisplayPalette({ TERM_PROGRAM: 'Apple_Terminal', PARSELY_DISPLAY_PALETTE: '1' }), true);
+});
+
+test('display palette helpers emit xterm-compatible background sequences', () => {
+  assert.equal(setDefaultTerminalBackground('#FDFFF7'), '\u001B]11;#FDFFF7\u001B\\');
+  assert.equal(resetDefaultTerminalBackground(), '\u001B]111\u001B\\');
 });
 
 test('createSynchronizedWriteProxy wraps output in synchronized paint escapes', async () => {

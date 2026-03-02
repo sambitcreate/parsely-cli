@@ -5,6 +5,7 @@
 
 export const theme = {
   colors: {
+    brand: '#009c3f',
     primary: '#86c06c',
     secondary: '#ffbf69',
     accent: '#ff7f50',
@@ -20,6 +21,13 @@ export const theme = {
     borderFocus: '#86c06c',
     label: '#ffbf69',
     chip: '#24303b',
+    recipePaper: '#FDFFF7',
+    recipeText: '#0aa043',
+    recipeMuted: '#8b9689',
+    recipeSubtle: '#5f7564',
+    recipeBorder: '#0aa043',
+    recipeSoft: '#dcead5',
+    recipePanel: '#f7fbef',
   },
   symbols: {
     bullet: '\u2022',
