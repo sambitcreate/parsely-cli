@@ -62,6 +62,38 @@ test('extractRecipeFromHtml returns a browser recipe when JSON-LD exists', () =>
   assert.deepEqual(recipe?.recipeIngredient, ['potatoes', 'salt']);
 });
 
+test('extractRecipeFromHtml normalizes encoded schema text', () => {
+  const recipe = extractRecipeFromHtml(`
+    <html>
+      <head>
+        <script type="application/ld+json">
+          {
+            "@context": "https://schema.org",
+            "@type": "Recipe",
+            "name": "Best &amp; Bright Guac",
+            "recipeIngredient": ["1 &amp; 1/2 avocados", "2 tbsp <strong>lime</strong> juice"],
+            "recipeInstructions": [
+              "Don&#39;t overmix the guacamole.",
+              {
+                "itemListElement": [
+                  { "text": "Fold in <em>cilantro</em>." }
+                ]
+              }
+            ]
+          }
+        </script>
+      </head>
+    </html>
+  `);
+
+  assert.equal(recipe?.name, 'Best & Bright Guac');
+  assert.deepEqual(recipe?.recipeIngredient, ['1 & 1/2 avocados', '2 tbsp lime juice']);
+  assert.deepEqual(recipe?.recipeInstructions, [
+    "Don't overmix the guacamole.",
+    { itemListElement: [{ text: 'Fold in cilantro.' }] },
+  ]);
+});
+
 test('extractRecipeFromHtml returns null when no recipe schema exists', () => {
   assert.equal(extractRecipeFromHtml('<html><body><h1>Hello</h1></body></html>'), null);
 });

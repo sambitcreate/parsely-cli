@@ -90,6 +90,82 @@ export function containsBrowserChallenge(html: string): boolean {
     html.includes('cf-mitigated');
 }
 
+function normalizeText(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const $ = cheerio.load(`<body>${trimmed}</body>`);
+  const text = $('body').text().replace(/\s+/g, ' ').trim();
+  return text || undefined;
+}
+
+function normalizeInstruction(
+  value: unknown,
+): string | { text?: string; itemListElement?: Array<{ text?: string }> } | undefined {
+  if (typeof value === 'string') {
+    return normalizeText(value);
+  }
+
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const text = normalizeText((value as { text?: unknown }).text);
+  const itemListElement = Array.isArray((value as { itemListElement?: unknown }).itemListElement)
+    ? (value as { itemListElement: Array<{ text?: unknown }> }).itemListElement
+        .map((item) => {
+          const normalized = normalizeText(item?.text);
+          return normalized ? { text: normalized } : null;
+        })
+        .filter((item): item is { text: string } => item !== null)
+    : undefined;
+
+  if (text) {
+    return { text, ...(itemListElement && itemListElement.length > 0 ? { itemListElement } : {}) };
+  }
+
+  if (itemListElement && itemListElement.length > 0) {
+    return { itemListElement };
+  }
+
+  return undefined;
+}
+
+function normalizeBrowserRecipe(recipe: Record<string, unknown>): Recipe {
+  const recipeIngredient = Array.isArray(recipe.recipeIngredient)
+    ? recipe.recipeIngredient
+        .map((item) => normalizeText(item))
+        .filter((item): item is string => Boolean(item))
+    : undefined;
+
+  const recipeInstructions = Array.isArray(recipe.recipeInstructions)
+    ? recipe.recipeInstructions
+        .map((step) => normalizeInstruction(step))
+        .filter(
+          (
+            step,
+          ): step is string | { text?: string; itemListElement?: Array<{ text?: string }> } =>
+            Boolean(step),
+        )
+    : undefined;
+
+  return {
+    name: normalizeText(recipe.name),
+    prepTime: typeof recipe.prepTime === 'string' ? recipe.prepTime.trim() : undefined,
+    cookTime: typeof recipe.cookTime === 'string' ? recipe.cookTime.trim() : undefined,
+    totalTime: typeof recipe.totalTime === 'string' ? recipe.totalTime.trim() : undefined,
+    recipeIngredient,
+    recipeInstructions,
+    source: 'browser',
+  };
+}
+
 export function extractRecipeFromHtml(html: string): Recipe | null {
   const $ = cheerio.load(html);
   const scripts: string[] = [];
@@ -100,7 +176,7 @@ export function extractRecipeFromHtml(html: string): Recipe | null {
   });
 
   const recipe = findRecipeJson(scripts);
-  return recipe ? ({ ...recipe, source: 'browser' } as Recipe) : null;
+  return recipe ? normalizeBrowserRecipe(recipe) : null;
 }
 
 /* ------------------------------------------------------------------ */
