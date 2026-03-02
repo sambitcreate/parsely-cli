@@ -1,6 +1,6 @@
 {
   "name": "@sambitcreate/parsely-cli",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A smart recipe scraper CLI with interactive TUI built on Ink",
   "type": "module",
   "main": "dist/cli.js",
