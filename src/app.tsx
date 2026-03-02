@@ -100,7 +100,8 @@ export function App({ initialUrl }: AppProps) {
     }
 
     if (phase === 'display' && input === 'n') handleNewRecipe();
-    if (phase === 'display' && (input === 'q' || key.escape)) exit();
+    if (phase === 'display' && input === 'q') exit();
+    if (phase === 'display' && key.escape) handleNewRecipe();
   }, { isActive: phase === 'display' || phase === 'scraping' || phase === 'idle' || phase === 'error' });
 
   const renderIdle = () => (
@@ -114,7 +115,7 @@ export function App({ initialUrl }: AppProps) {
   const renderDisplay = () => (
     <Box flexDirection="column" flexGrow={1}>
       {recipe && (
-        <RecipeCard recipe={recipe} width={width} sourceUrl={currentUrl} />
+        <RecipeCard recipe={recipe} width={width} height={renderHeight} sourceUrl={currentUrl} />
       )}
     </Box>
   );
@@ -138,7 +139,7 @@ export function App({ initialUrl }: AppProps) {
 
   if (phase === 'display') {
     return (
-      <Box flexDirection="column" width="100%">
+      <Box flexDirection="column" width="100%" height={renderHeight}>
         {renderDisplay()}
       </Box>
     );
