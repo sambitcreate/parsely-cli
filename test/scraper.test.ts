@@ -96,6 +96,28 @@ test('extractRecipeFromHtml normalizes encoded schema text', () => {
   ]);
 });
 
+test('extractRecipeFromHtml strips terminal escape sequences from schema text', () => {
+  const recipe = extractRecipeFromHtml(`
+    <html>
+      <head>
+        <script type="application/ld+json">
+          {
+            "@context": "https://schema.org",
+            "@type": "Recipe",
+            "name": "\\u001b]0;owned\\u0007Fresh Pasta",
+            "recipeIngredient": ["\\u001b[31m2 cups flour\\u001b[0m"],
+            "recipeInstructions": ["Mix until smooth\\u001b[2J"]
+          }
+        </script>
+      </head>
+    </html>
+  `);
+
+  assert.equal(recipe?.name, 'Fresh Pasta');
+  assert.deepEqual(recipe?.recipeIngredient, ['2 cups flour']);
+  assert.deepEqual(recipe?.recipeInstructions, ['Mix until smooth']);
+});
+
 test('extractRecipeFromHtml returns null when no recipe schema exists', () => {
   assert.equal(extractRecipeFromHtml('<html><body><h1>Hello</h1></body></html>'), null);
 });

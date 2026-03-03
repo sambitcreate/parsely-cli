@@ -10,6 +10,7 @@ import { PhaseRail } from './components/PhaseRail.js';
 import { scrapeRecipe, type Recipe, type ScrapeStatus } from './services/scraper.js';
 import { useTerminalViewport } from './hooks/useTerminalViewport.js';
 import { theme } from './theme.js';
+import { sanitizeTerminalText } from './utils/helpers.js';
 import { getRenderableHeight } from './utils/terminal.js';
 import { LandingScreen } from './components/LandingScreen.js';
 import { LoadingScreen } from './components/LoadingScreen.js';
@@ -64,7 +65,7 @@ export function App({ initialUrl }: AppProps) {
         return;
       }
 
-      setError(err instanceof Error ? err.message : 'Failed to scrape recipe');
+      setError(err instanceof Error ? sanitizeTerminalText(err.message) : 'Failed to scrape recipe');
       setPhase('error');
     } finally {
       if (activeScrapeController.current === controller) {

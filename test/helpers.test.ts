@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeRecipeUrl, sanitizeSingleLineInput } from '../src/utils/helpers.js';
+import {
+  normalizeRecipeUrl,
+  sanitizeSingleLineInput,
+  sanitizeTerminalText,
+} from '../src/utils/helpers.js';
 
 test('sanitizeSingleLineInput removes carriage returns and newlines', () => {
   assert.equal(
@@ -34,4 +38,11 @@ test('normalizeRecipeUrl rejects non-http schemes', () => {
 
 test('normalizeRecipeUrl rejects empty input', () => {
   assert.equal(normalizeRecipeUrl('   '), null);
+});
+
+test('sanitizeTerminalText strips ansi and control sequences', () => {
+  assert.equal(
+    sanitizeTerminalText('\u001b]0;spoofed title\u0007Fresh \u001b[31mbasil\u001b[0m'),
+    'Fresh basil',
+  );
 });

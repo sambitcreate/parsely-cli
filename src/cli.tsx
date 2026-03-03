@@ -2,6 +2,7 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './app.js';
+import { sanitizeTerminalText } from './utils/helpers.js';
 import { createSynchronizedWriteProxy, shouldUseSynchronizedOutput } from './utils/terminal.js';
 
 const ENTER_ALT_SCREEN = '\u001B[?1049h\u001B[2J\u001B[H';
@@ -63,6 +64,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(error instanceof Error ? sanitizeTerminalText(error.message) : 'Unexpected error');
   process.exit(1);
 });

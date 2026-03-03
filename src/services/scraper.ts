@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import { constants as fsConstants } from 'node:fs';
 import { access } from 'node:fs/promises';
-import { loadConfig, normalizeRecipeUrl } from '../utils/helpers.js';
+import { loadConfig, normalizeRecipeUrl, sanitizeTerminalText } from '../utils/helpers.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -105,7 +105,7 @@ function normalizeText(value: unknown): string | undefined {
     return undefined;
   }
 
-  const $ = cheerio.load(`<body>${trimmed}</body>`);
+  const $ = cheerio.load(`<body>${sanitizeTerminalText(trimmed)}</body>`);
   const text = $('body').text().replace(/\s+/g, ' ').trim();
   return text || undefined;
 }
@@ -174,9 +174,9 @@ function normalizeRecipePayload(
 
   return {
     name: normalizeText(recipe.name),
-    prepTime: typeof recipe.prepTime === 'string' ? recipe.prepTime.trim() : undefined,
-    cookTime: typeof recipe.cookTime === 'string' ? recipe.cookTime.trim() : undefined,
-    totalTime: typeof recipe.totalTime === 'string' ? recipe.totalTime.trim() : undefined,
+    prepTime: typeof recipe.prepTime === 'string' ? sanitizeTerminalText(recipe.prepTime.trim()) : undefined,
+    cookTime: typeof recipe.cookTime === 'string' ? sanitizeTerminalText(recipe.cookTime.trim()) : undefined,
+    totalTime: typeof recipe.totalTime === 'string' ? sanitizeTerminalText(recipe.totalTime.trim()) : undefined,
     recipeIngredient,
     recipeInstructions: normalizeInstructions(recipe.recipeInstructions),
     source,

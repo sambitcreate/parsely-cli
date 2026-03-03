@@ -1,6 +1,10 @@
 import { config } from 'dotenv';
 import { resolve } from 'path';
 
+const ANSI_ESCAPE_PATTERN =
+  /\u001B(?:\][^\u0007\u001B]*(?:\u0007|\u001B\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g;
+const CONTROL_CHAR_PATTERN = /[\u0000-\u0008\u000B-\u001A\u001C-\u001F\u007F-\u009F]/g;
+
 /**
  * Convert an ISO 8601 duration string (e.g. "PT1H30M") to total minutes.
  * Returns -1 when the input is not parseable.
@@ -40,6 +44,12 @@ export function loadConfig(): { openaiApiKey?: string } {
   return {
     openaiApiKey: process.env['OPENAI_API_KEY'],
   };
+}
+
+export function sanitizeTerminalText(input: string): string {
+  return input
+    .replace(ANSI_ESCAPE_PATTERN, '')
+    .replace(CONTROL_CHAR_PATTERN, '');
 }
 
 export function sanitizeSingleLineInput(input: string): string {
