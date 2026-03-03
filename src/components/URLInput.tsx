@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
-import { Box, Text } from 'ink';
+import React, { useEffect, useRef, useState } from 'react';
+import { Box, Text, useStdin } from 'ink';
 import TextInput from 'ink-text-input';
 import { theme } from '../theme.js';
 import { normalizeRecipeUrl, sanitizeSingleLineInput } from '../utils/helpers.js';
 
 interface URLInputProps {
   onSubmit: (url: string) => void;
+  onToggleTheme?: () => void;
   mode?: 'default' | 'landing';
   width?: number;
 }
 
-export function URLInput({ onSubmit, mode = 'default', width }: URLInputProps) {
+export function URLInput({ onSubmit, onToggleTheme, mode = 'default', width }: URLInputProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
+  const ignoreNextChange = useRef(false);
+  const { stdin } = useStdin();
   const landing = mode === 'landing';
   const landingButtonLabel = '  Go  ';
   const shortcutCopy = width && width < 40
@@ -37,11 +40,39 @@ export function URLInput({ onSubmit, mode = 'default', width }: URLInputProps) {
   };
 
   const handleChange = (nextValue: string) => {
+    if (ignoreNextChange.current) {
+      ignoreNextChange.current = false;
+      return;
+    }
+
     const sanitized = sanitizeSingleLineInput(nextValue);
 
     setValue(sanitized);
     if (error) setError('');
   };
+
+  useEffect(() => {
+    if (!onToggleTheme) {
+      return;
+    }
+
+    const handleData = (data: Buffer | string) => {
+      const chunk = typeof data === 'string' ? data : data.toString('utf8');
+
+      if (!chunk.includes('\u0014')) {
+        return;
+      }
+
+      ignoreNextChange.current = true;
+      onToggleTheme();
+    };
+
+    stdin.on('data', handleData);
+
+    return () => {
+      stdin.off('data', handleData);
+    };
+  }, [onToggleTheme, stdin]);
 
   return (
     <Box flexDirection="column">

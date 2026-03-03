@@ -10,6 +10,7 @@ interface LandingScreenProps {
   width: number;
   height: number;
   onSubmit: (url: string) => void;
+  onToggleTheme?: () => void;
 }
 
 interface LandingArt {
@@ -125,7 +126,7 @@ const compactLandingArt: LandingArt = {
   width: 'PARSLEY'.length,
 };
 
-export function LandingScreen({ width, height, onSubmit }: LandingScreenProps) {
+export function LandingScreen({ width, height, onSubmit, onToggleTheme }: LandingScreenProps) {
   const art = width >= primaryLandingArt.width + 8 ? primaryLandingArt : compactLandingArt;
   const artKeys = buildOccurrenceKeys(art.lines);
   const inputWidth = width >= 120 ? 54 : width >= 84 ? 46 : Math.max(28, width - 16);
@@ -147,7 +148,7 @@ export function LandingScreen({ width, height, onSubmit }: LandingScreenProps) {
           </Box>
 
           <Box width={controlsWidth} justifyContent="center">
-            <URLInput onSubmit={onSubmit} mode="landing" width={inputWidth} />
+            <URLInput onSubmit={onSubmit} onToggleTheme={onToggleTheme} mode="landing" width={inputWidth} />
           </Box>
         </Box>
       </Box>

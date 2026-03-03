@@ -12,6 +12,7 @@ import { useTerminalViewport } from './hooks/useTerminalViewport.js';
 import { detectPreferredThemeMode, resolveInitialThemeMode, setActiveTheme, theme, toggleThemeMode, type ThemeMode } from './theme.js';
 import { useDisplayPalette } from './hooks/useDisplayPalette.js';
 import { sanitizeTerminalText } from './utils/helpers.js';
+import { isThemeToggleShortcut } from './utils/shortcuts.js';
 import { getRenderableHeight } from './utils/terminal.js';
 import { LandingScreen } from './components/LandingScreen.js';
 import { LoadingScreen } from './components/LoadingScreen.js';
@@ -43,6 +44,11 @@ export function App({ initialUrl }: AppProps) {
     setActiveTheme(mode);
     setThemeMode(mode);
   }, []);
+
+  const handleToggleTheme = useCallback(() => {
+    hasManualThemeOverride.current = true;
+    applyThemeMode(toggleThemeMode(themeMode));
+  }, [applyThemeMode, themeMode]);
 
   const cancelActiveScrape = useCallback(() => {
     activeScrapeController.current?.abort();
@@ -130,9 +136,8 @@ export function App({ initialUrl }: AppProps) {
       return;
     }
 
-    if (key.ctrl && input === 't') {
-      hasManualThemeOverride.current = true;
-      applyThemeMode(toggleThemeMode(themeMode));
+    if ((phase === 'display' || phase === 'scraping') && isThemeToggleShortcut(input, key)) {
+      handleToggleTheme();
       return;
     }
 
@@ -142,7 +147,7 @@ export function App({ initialUrl }: AppProps) {
   }, { isActive: phase === 'display' || phase === 'scraping' || phase === 'idle' || phase === 'error' });
 
   const renderIdle = () => (
-    <LandingScreen width={width} height={renderHeight} onSubmit={handleScrape} />
+    <LandingScreen width={width} height={renderHeight} onSubmit={handleScrape} onToggleTheme={handleToggleTheme} />
   );
 
   const renderScraping = () => (
@@ -162,7 +167,7 @@ export function App({ initialUrl }: AppProps) {
       <Box flexDirection="column" width={wide && !shortViewport ? '58%' : undefined}>
         <ErrorDisplay message={error} />
         <Panel title="Try another URL" eyebrow="Retry" accentColor={theme.colors.primary}>
-          <URLInput onSubmit={handleScrape} />
+          <URLInput onSubmit={handleScrape} onToggleTheme={handleToggleTheme} />
         </Panel>
       </Box>
 
