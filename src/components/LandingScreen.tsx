@@ -18,10 +18,18 @@ interface LandingArt {
   width: number;
 }
 
-const logoSvg = readFileSync(
-  fileURLToPath(new URL('../../public/parsely-logo.svg', import.meta.url)),
-  'utf8',
-);
+function readLogoSvg(): string {
+  try {
+    return readFileSync(
+      fileURLToPath(new URL('../../public/parsely-logo.svg', import.meta.url)),
+      'utf8',
+    );
+  } catch {
+    return '';
+  }
+}
+
+const logoSvg = readLogoSvg();
 
 const logoColor = logoSvg.match(/fill="(#[0-9a-fA-F]{6})"/)?.[1] ?? theme.colors.brand;
 

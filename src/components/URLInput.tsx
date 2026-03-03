@@ -38,10 +38,6 @@ export function URLInput({ onSubmit, mode = 'default', width }: URLInputProps) {
 
     setValue(sanitized);
     if (error) setError('');
-
-    if (sanitized !== nextValue && sanitized.trim()) {
-      handleSubmit(sanitized);
-    }
   };
 
   return (

@@ -28,6 +28,7 @@ export function App({ initialUrl }: AppProps) {
   const [error, setError] = useState('');
   const [currentUrl, setCurrentUrl] = useState(initialUrl ?? '');
   const activeScrapeController = useRef<AbortController | null>(null);
+  const initialScrapeStarted = useRef(false);
 
   const wide = width >= 112;
   const shortViewport = renderHeight < 30;
@@ -81,10 +82,13 @@ export function App({ initialUrl }: AppProps) {
   }, []);
 
   useEffect(() => {
-    if (initialUrl) {
-      handleScrape(initialUrl);
+    if (!initialUrl || initialScrapeStarted.current) {
+      return;
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    initialScrapeStarted.current = true;
+    void handleScrape(initialUrl);
+  }, [handleScrape, initialUrl]);
 
   useEffect(() => {
     return () => {
