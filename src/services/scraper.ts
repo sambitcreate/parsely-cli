@@ -1,8 +1,8 @@
 import puppeteer from 'puppeteer-core';
 import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
-import { execSync } from 'child_process';
-import { existsSync } from 'fs';
+import { constants as fsConstants } from 'node:fs';
+import { access } from 'node:fs/promises';
 import { loadConfig, normalizeRecipeUrl } from '../utils/helpers.js';
 
 /* ------------------------------------------------------------------ */
@@ -36,6 +36,11 @@ const BROWSER_ARGS = [
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+
+const PAGE_TIMEOUT_MS = 20_000;
+const NETWORK_IDLE_TIMEOUT_MS = 5_000;
+const AI_TIMEOUT_MS = 30_000;
+const AI_SOURCE_LIMIT = 120_000;
 
 /* ------------------------------------------------------------------ */
 /*  JSON-LD helpers                                                    */
@@ -137,22 +142,34 @@ function normalizeInstruction(
   return undefined;
 }
 
-function normalizeBrowserRecipe(recipe: Record<string, unknown>): Recipe {
+function normalizeInstructions(
+  value: unknown,
+): Recipe['recipeInstructions'] | undefined {
+  if (Array.isArray(value)) {
+    const steps = value
+      .map((step) => normalizeInstruction(step))
+      .filter(
+        (
+          step,
+        ): step is string | { text?: string; itemListElement?: Array<{ text?: string }> } =>
+          Boolean(step),
+      );
+
+    return steps.length > 0 ? steps : undefined;
+  }
+
+  const single = normalizeInstruction(value);
+  return single ? [single] : undefined;
+}
+
+function normalizeRecipePayload(
+  recipe: Record<string, unknown>,
+  source: Recipe['source'],
+): Recipe {
   const recipeIngredient = Array.isArray(recipe.recipeIngredient)
     ? recipe.recipeIngredient
         .map((item) => normalizeText(item))
         .filter((item): item is string => Boolean(item))
-    : undefined;
-
-  const recipeInstructions = Array.isArray(recipe.recipeInstructions)
-    ? recipe.recipeInstructions
-        .map((step) => normalizeInstruction(step))
-        .filter(
-          (
-            step,
-          ): step is string | { text?: string; itemListElement?: Array<{ text?: string }> } =>
-            Boolean(step),
-        )
     : undefined;
 
   return {
@@ -161,9 +178,28 @@ function normalizeBrowserRecipe(recipe: Record<string, unknown>): Recipe {
     cookTime: typeof recipe.cookTime === 'string' ? recipe.cookTime.trim() : undefined,
     totalTime: typeof recipe.totalTime === 'string' ? recipe.totalTime.trim() : undefined,
     recipeIngredient,
-    recipeInstructions,
-    source: 'browser',
+    recipeInstructions: normalizeInstructions(recipe.recipeInstructions),
+    source,
   };
+}
+
+function normalizeBrowserRecipe(recipe: Record<string, unknown>): Recipe {
+  return normalizeRecipePayload(recipe, 'browser');
+}
+
+export function normalizeAiRecipe(recipe: Record<string, unknown>): Recipe {
+  return normalizeRecipePayload(recipe, 'ai');
+}
+
+function hasRecipeContent(recipe: Recipe): boolean {
+  return Boolean(
+    recipe.name ||
+      recipe.prepTime ||
+      recipe.cookTime ||
+      recipe.totalTime ||
+      recipe.recipeIngredient?.length ||
+      recipe.recipeInstructions?.length,
+  );
 }
 
 export function extractRecipeFromHtml(html: string): Recipe | null {
@@ -192,16 +228,22 @@ const CHROME_PATHS = [
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
 ];
 
-function findChrome(): string | null {
-  // Check well-known paths
-  for (const p of CHROME_PATHS) {
-    if (existsSync(p)) return p;
+async function findChrome(): Promise<string | null> {
+  const candidates = [
+    process.env['PUPPETEER_EXECUTABLE_PATH'],
+    process.env['CHROME_PATH'],
+    ...CHROME_PATHS,
+  ].filter((path): path is string => Boolean(path));
+
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, fsConstants.X_OK);
+      return candidate;
+    } catch {
+      // Try the next well-known location.
+    }
   }
-  // Try `which`
-  try {
-    const result = execSync('which chromium-browser || which chromium || which google-chrome 2>/dev/null', { encoding: 'utf-8' }).trim();
-    if (result) return result;
-  } catch { /* not found */ }
+
   return null;
 }
 
@@ -227,6 +269,70 @@ async function configurePage(page: Awaited<ReturnType<Awaited<ReturnType<typeof 
   });
 }
 
+function createTimedSignal(
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+
+  if (signal?.aborted) {
+    controller.abort();
+  }
+
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort, { once: true });
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', onAbort);
+    },
+  };
+}
+
+function formatTimeoutError(message: string, signal?: AbortSignal): Error {
+  return signal?.aborted ? createAbortError() : new Error(message);
+}
+
+function limitAiSource(value: string): string {
+  return value.trim().slice(0, AI_SOURCE_LIMIT);
+}
+
+async function fetchAiSource(url: string, signal?: AbortSignal): Promise<string> {
+  throwIfAborted(signal);
+
+  const { signal: timedSignal, cleanup } = createTimedSignal(signal, PAGE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'accept-language': 'en-US,en;q=0.9',
+        'user-agent': BROWSER_USER_AGENT,
+      },
+      signal: timedSignal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to load recipe page for AI fallback (${response.status})`);
+    }
+
+    return limitAiSource(await response.text());
+  } catch (error) {
+    if (timedSignal.aborted) {
+      throw formatTimeoutError('Timed out loading recipe page for AI fallback', signal);
+    }
+
+    throw error;
+  } finally {
+    cleanup();
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Scraping strategies                                                */
 /* ------------------------------------------------------------------ */
@@ -235,12 +341,13 @@ async function scrapeWithBrowser(
   url: string,
   onStatus?: (status: ScrapeStatus) => void,
   signal?: AbortSignal,
-): Promise<Recipe | null> {
+): Promise<{ recipe: Recipe | null; html?: string }> {
   throwIfAborted(signal);
-  const chromePath = findChrome();
-  if (!chromePath) return null; // No browser available – skip to AI
+  const chromePath = await findChrome();
+  if (!chromePath) return { recipe: null }; // No browser available – skip to AI
 
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+  let settledHtml: string | undefined;
   const onAbort = async () => {
     if (browser) {
       try {
@@ -265,8 +372,8 @@ async function scrapeWithBrowser(
     await configurePage(page);
 
     onStatus?.({ phase: 'browser', message: 'Loading recipe page…' });
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
-    await page.waitForNetworkIdle({ idleTime: 500, timeout: 5_000 }).catch(() => undefined);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT_MS });
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: NETWORK_IDLE_TIMEOUT_MS }).catch(() => undefined);
 
     throwIfAborted(signal);
     const html = await page.content();
@@ -280,27 +387,33 @@ async function scrapeWithBrowser(
     }
 
     throwIfAborted(signal);
-    const settledHtml = await page.content();
+    settledHtml = await page.content();
 
     onStatus?.({ phase: 'parsing', message: 'Scanning recipe schema and JSON-LD blocks…' });
-    await browser.close();
-    browser = null;
-    return extractRecipeFromHtml(settledHtml);
+    return {
+      recipe: extractRecipeFromHtml(settledHtml),
+      html: settledHtml,
+    };
   } catch (error) {
     if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
       throw createAbortError();
     }
 
-    if (browser) {
-      try { await browser.close(); } catch { /* noop */ }
-    }
-    return null;
+    onStatus?.({ phase: 'browser', message: 'Browser extraction failed. Preparing AI fallback…' });
+    return { recipe: null, html: settledHtml };
   } finally {
     signal?.removeEventListener('abort', onAbort);
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {
+        // Ignore close errors during teardown.
+      }
+    }
   }
 }
 
-async function scrapeWithAI(url: string, signal?: AbortSignal): Promise<Recipe> {
+async function scrapeWithAI(url: string, pageSource: string, signal?: AbortSignal): Promise<Recipe> {
   throwIfAborted(signal);
   const { openaiApiKey } = loadConfig();
   if (!openaiApiKey || openaiApiKey === 'YOUR_API_KEY_HERE') {
@@ -310,26 +423,49 @@ async function scrapeWithAI(url: string, signal?: AbortSignal): Promise<Recipe> 
   }
 
   const client = new OpenAI({ apiKey: openaiApiKey });
-  const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'system',
-        content:
-          'You are a recipe scraper. Extract cookTime, prepTime, totalTime, ' +
-          'recipeIngredient, and recipeInstructions from the provided URL. ' +
-          'Return the data in a valid JSON object.',
-      },
-      { role: 'user', content: `Scrape this recipe: ${url}` },
-    ],
-    response_format: { type: 'json_object' },
-  }, { signal });
+  const { signal: timedSignal, cleanup } = createTimedSignal(signal, AI_TIMEOUT_MS);
+  let response: Awaited<ReturnType<typeof client.chat.completions.create>>;
+
+  try {
+    response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You extract recipe data from supplied page content. Use only the provided page content. ' +
+            'Return a JSON object with optional name, prepTime, cookTime, totalTime, recipeIngredient, and recipeInstructions fields.',
+        },
+        {
+          role: 'user',
+          content:
+            `Recipe URL: ${url}\n\n` +
+            'Page content:\n' +
+            pageSource,
+        },
+      ],
+      response_format: { type: 'json_object' },
+    }, { signal: timedSignal });
+  } catch (error) {
+    if (timedSignal.aborted) {
+      throw formatTimeoutError('AI recipe extraction timed out', signal);
+    }
+
+    throw error;
+  } finally {
+    cleanup();
+  }
 
   const content = response.choices[0]?.message?.content;
   if (!content) throw new Error('AI returned empty response');
 
-  const recipe = JSON.parse(content) as Record<string, unknown>;
-  return { ...recipe, source: 'ai' as const } as Recipe;
+  const recipe = normalizeAiRecipe(JSON.parse(content) as Record<string, unknown>);
+
+  if (!hasRecipeContent(recipe)) {
+    throw new Error('AI could not extract recipe data from the page');
+  }
+
+  return recipe;
 }
 
 /* ------------------------------------------------------------------ */
@@ -357,16 +493,19 @@ export async function scrapeRecipe(
   onStatus({ phase: 'browser', message: 'Launching browser\u2026' });
   const browserResult = await scrapeWithBrowser(normalizedUrl, onStatus, signal);
 
-  if (browserResult) {
-    onStatus({ phase: 'done', message: 'Recipe found!', recipe: browserResult });
-    return browserResult;
+  if (browserResult.recipe) {
+    onStatus({ phase: 'done', message: 'Recipe found!', recipe: browserResult.recipe });
+    return browserResult.recipe;
   }
 
   // Phase 2 – AI fallback
   onStatus({ phase: 'ai', message: 'Falling back to AI scraper\u2026' });
 
   try {
-    const aiResult = await scrapeWithAI(normalizedUrl, signal);
+    const pageSource = browserResult.html && browserResult.html.trim()
+      ? limitAiSource(browserResult.html)
+      : await fetchAiSource(normalizedUrl, signal);
+    const aiResult = await scrapeWithAI(normalizedUrl, pageSource, signal);
     onStatus({ phase: 'done', message: 'Recipe extracted via AI!', recipe: aiResult });
     return aiResult;
   } catch (error) {

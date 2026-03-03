@@ -4,6 +4,7 @@ import {
   containsBrowserChallenge,
   extractRecipeFromHtml,
   findRecipeJson,
+  normalizeAiRecipe,
   scrapeRecipe,
 } from '../src/services/scraper.js';
 
@@ -97,6 +98,32 @@ test('extractRecipeFromHtml normalizes encoded schema text', () => {
 
 test('extractRecipeFromHtml returns null when no recipe schema exists', () => {
   assert.equal(extractRecipeFromHtml('<html><body><h1>Hello</h1></body></html>'), null);
+});
+
+test('normalizeAiRecipe keeps only supported recipe fields', () => {
+  const recipe = normalizeAiRecipe({
+    name: ' Weeknight Curry ',
+    prepTime: 'PT15M',
+    recipeIngredient: [' 1 onion ', '<b>2 tbsp oil</b>'],
+    recipeInstructions: {
+      itemListElement: [
+        { text: ' Saute the onion. ' },
+        { text: '<em>Add</em> the spices.' },
+      ],
+    },
+    source: 'browser',
+    arbitrary: 'ignored',
+  });
+
+  assert.deepEqual(recipe, {
+    name: 'Weeknight Curry',
+    prepTime: 'PT15M',
+    cookTime: undefined,
+    totalTime: undefined,
+    recipeIngredient: ['1 onion', '2 tbsp oil'],
+    recipeInstructions: [{ itemListElement: [{ text: 'Saute the onion.' }, { text: 'Add the spices.' }] }],
+    source: 'ai',
+  });
 });
 
 test('containsBrowserChallenge detects Cloudflare challenge markup', () => {
