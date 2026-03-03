@@ -17,18 +17,22 @@ interface KeyHint {
 const keybinds: Record<AppPhase, KeyHint[]> = {
   idle: [
     { key: 'enter', label: 'scrape' },
+    { key: 'ctrl+t', label: 'theme' },
     { key: 'ctrl+c', label: 'exit' },
   ],
   scraping: [
+    { key: 'ctrl+t', label: 'theme' },
     { key: 'ctrl+c', label: 'exit' },
   ],
   display: [
     { key: 'n', label: 'new recipe' },
+    { key: 'ctrl+t', label: 'theme' },
     { key: 'q', label: 'quit' },
     { key: 'esc', label: 'back' },
   ],
   error: [
     { key: 'enter', label: 'retry' },
+    { key: 'ctrl+t', label: 'theme' },
     { key: 'ctrl+c', label: 'exit' },
   ],
 };

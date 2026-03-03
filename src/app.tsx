@@ -9,7 +9,8 @@ import { Panel } from './components/Panel.js';
 import { PhaseRail } from './components/PhaseRail.js';
 import { scrapeRecipe, type Recipe, type ScrapeStatus } from './services/scraper.js';
 import { useTerminalViewport } from './hooks/useTerminalViewport.js';
-import { theme } from './theme.js';
+import { detectPreferredThemeMode, resolveInitialThemeMode, setActiveTheme, theme, toggleThemeMode, type ThemeMode } from './theme.js';
+import { useDisplayPalette } from './hooks/useDisplayPalette.js';
 import { sanitizeTerminalText } from './utils/helpers.js';
 import { getRenderableHeight } from './utils/terminal.js';
 import { LandingScreen } from './components/LandingScreen.js';
@@ -24,15 +25,24 @@ export function App({ initialUrl }: AppProps) {
   const { width, height } = useTerminalViewport();
   const renderHeight = getRenderableHeight(height);
   const [phase, setPhase] = useState<AppPhase>(initialUrl ? 'scraping' : 'idle');
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => resolveInitialThemeMode());
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [scrapeStatus, setScrapeStatus] = useState<ScrapeStatus | null>(null);
   const [error, setError] = useState('');
   const [currentUrl, setCurrentUrl] = useState(initialUrl ?? '');
   const activeScrapeController = useRef<AbortController | null>(null);
   const initialScrapeStarted = useRef(false);
+  const hasManualThemeOverride = useRef(false);
 
   const wide = width >= 112;
   const shortViewport = renderHeight < 30;
+
+  useDisplayPalette(theme.colors.recipePaper);
+
+  const applyThemeMode = useCallback((mode: ThemeMode) => {
+    setActiveTheme(mode);
+    setThemeMode(mode);
+  }, []);
 
   const cancelActiveScrape = useCallback(() => {
     activeScrapeController.current?.abort();
@@ -97,10 +107,32 @@ export function App({ initialUrl }: AppProps) {
     };
   }, [cancelActiveScrape]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void detectPreferredThemeMode().then((mode) => {
+      if (cancelled || hasManualThemeOverride.current || mode === themeMode) {
+        return;
+      }
+
+      applyThemeMode(mode);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyThemeMode, themeMode]);
+
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
       cancelActiveScrape();
       exit();
+      return;
+    }
+
+    if (key.ctrl && input === 't') {
+      hasManualThemeOverride.current = true;
+      applyThemeMode(toggleThemeMode(themeMode));
       return;
     }
 

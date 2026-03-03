@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { URLInput } from './URLInput.js';
 import { theme } from '../theme.js';
-import { useDisplayPalette } from '../hooks/useDisplayPalette.js';
 
 interface LandingScreenProps {
   width: number;
@@ -127,14 +126,11 @@ const compactLandingArt: LandingArt = {
 };
 
 export function LandingScreen({ width, height, onSubmit }: LandingScreenProps) {
-  useDisplayPalette(theme.colors.recipePaper);
-
   const art = width >= primaryLandingArt.width + 8 ? primaryLandingArt : compactLandingArt;
   const artKeys = buildOccurrenceKeys(art.lines);
   const inputWidth = width >= 120 ? 54 : width >= 84 ? 46 : Math.max(28, width - 16);
   const controlsWidth = inputWidth + 8;
   const contentWidth = Math.min(width - 6, Math.max(controlsWidth, art.width));
-  const footerCopy = width >= 52 ? 'ctrl+c exit' : 'ctrl+c';
 
   return (
     <Box flexDirection="column" width="100%" height="100%" paddingX={2} paddingY={1}>
@@ -154,12 +150,6 @@ export function LandingScreen({ width, height, onSubmit }: LandingScreenProps) {
             <URLInput onSubmit={onSubmit} mode="landing" width={inputWidth} />
           </Box>
         </Box>
-      </Box>
-
-      <Box justifyContent="flex-end">
-        <Text color={theme.colors.recipeMuted} bold>
-          {footerCopy}
-        </Text>
       </Box>
     </Box>
   );

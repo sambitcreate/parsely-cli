@@ -3,7 +3,6 @@ import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import type { ScrapeStatus } from '../services/scraper.js';
 import { theme } from '../theme.js';
-import { useDisplayPalette } from '../hooks/useDisplayPalette.js';
 
 interface LoadingScreenProps {
   status?: ScrapeStatus | null;
@@ -23,8 +22,6 @@ function getLoadingCopy(status?: ScrapeStatus | null): string {
 }
 
 export function LoadingScreen({ status }: LoadingScreenProps) {
-  useDisplayPalette(theme.colors.recipePaper);
-
   return (
     <Box width="100%" height="100%" justifyContent="center" alignItems="center">
       <Box flexDirection="column" alignItems="center">

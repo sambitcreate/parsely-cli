@@ -15,6 +15,9 @@ export function URLInput({ onSubmit, mode = 'default', width }: URLInputProps) {
   const [error, setError] = useState('');
   const landing = mode === 'landing';
   const landingButtonLabel = '  Go  ';
+  const shortcutCopy = width && width < 40
+    ? 'ctrl+c exit'
+    : 'ctrl+c exit  ·  ctrl+t theme';
 
   const handleSubmit = (input: string) => {
     const url = normalizeRecipeUrl(input);
@@ -84,13 +87,18 @@ export function URLInput({ onSubmit, mode = 'default', width }: URLInputProps) {
         )}
       </Box>
 
-      {!landing && (
-        <Box marginTop={1}>
+      <Box flexDirection="column" marginTop={1}>
+        {!landing && (
           <Text color={theme.colors.muted}>
             Press enter to scrape. Try a specific recipe page, not a site homepage.
           </Text>
+        )}
+        <Box justifyContent={landing ? 'center' : 'flex-end'}>
+          <Text color={theme.colors.muted}>
+            {shortcutCopy}
+          </Text>
         </Box>
-      )}
+      </Box>
 
       {error && (
         <Box marginLeft={landing ? 0 : 2} marginTop={1} justifyContent={landing ? 'center' : undefined}>

@@ -3,7 +3,12 @@ import React from 'react';
 import { render } from 'ink';
 import { App } from './app.js';
 import { sanitizeTerminalText } from './utils/helpers.js';
-import { createSynchronizedWriteProxy, shouldUseSynchronizedOutput } from './utils/terminal.js';
+import {
+  createSynchronizedWriteProxy,
+  resetDefaultTerminalBackground,
+  shouldUseDisplayPalette,
+  shouldUseSynchronizedOutput,
+} from './utils/terminal.js';
 
 const ENTER_ALT_SCREEN = '\u001B[?1049h\u001B[2J\u001B[H';
 const EXIT_ALT_SCREEN = '\u001B[?1049l';
@@ -57,8 +62,16 @@ async function main() {
     });
     await instance.waitUntilExit();
   } finally {
+    if (useAltScreen && shouldUseDisplayPalette()) {
+      process.stdout.write(resetDefaultTerminalBackground());
+    }
+
     if (useAltScreen) {
       process.stdout.write(EXIT_ALT_SCREEN);
+    }
+
+    if (useAltScreen && shouldUseDisplayPalette()) {
+      process.stdout.write(resetDefaultTerminalBackground());
     }
   }
 }

@@ -5,7 +5,6 @@ import { theme } from '../theme.js';
 import { formatMinutes, getUrlHost, isoToMinutes } from '../utils/helpers.js';
 import { wrapText } from '../utils/text-layout.js';
 import type { Recipe } from '../services/scraper.js';
-import { useDisplayPalette } from '../hooks/useDisplayPalette.js';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -215,15 +214,15 @@ function buildCompactBodyLines(
 function buildCompactFooter(width: number, scrollOffset: number, maxScroll: number): string {
   const location = maxScroll > 0 ? `${scrollOffset + 1}/${maxScroll + 1}` : '1/1';
 
-  if (width >= 78) {
-    return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  pgup/pgdn jump  ${theme.symbols.dot}  esc back  ${theme.symbols.dot}  n new  ${theme.symbols.dot}  q quit`;
+  if (width >= 96) {
+    return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  pgup/pgdn jump  ${theme.symbols.dot}  ctrl+t theme  ${theme.symbols.dot}  esc back  ${theme.symbols.dot}  n new  ${theme.symbols.dot}  q quit`;
   }
 
   if (width >= 58) {
-    return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  esc back  ${theme.symbols.dot}  q quit`;
+    return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  ctrl+t theme  ${theme.symbols.dot}  esc back`;
   }
 
-  return `esc back  ${theme.symbols.dot}  q quit`;
+  return `ctrl+t theme  ${theme.symbols.dot}  esc back`;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -231,8 +230,6 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps) {
-  useDisplayPalette(theme.colors.recipePaper);
-
   const [scrollOffset, setScrollOffset] = useState(0);
   const instructions = extractInstructions(recipe);
   const ingredients = recipe.recipeIngredient ?? [];
@@ -513,6 +510,10 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
               <Text color={theme.colors.recipeText} bold>
                 n
                 <Text color={theme.colors.recipeMuted}> new recipe</Text>
+              </Text>
+              <Text color={theme.colors.recipeText} bold>
+                ctrl+t
+                <Text color={theme.colors.recipeMuted}> toggle theme</Text>
               </Text>
               <Text color={theme.colors.recipeText} bold>
                 q
