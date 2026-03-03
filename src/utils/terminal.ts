@@ -5,6 +5,11 @@ const ST = '\u001B\\';
 
 type EnvMap = Record<string, string | undefined>;
 
+const DISPLAY_PALETTE_TERM_PROGRAMS = new Set([
+  'ghostty',
+  'Apple_Terminal',
+]);
+
 export function getRenderableHeight(rows: number): number {
   if (!Number.isFinite(rows) || rows <= 1) {
     return 1;
@@ -34,7 +39,7 @@ export function shouldUseDisplayPalette(env: EnvMap = process.env): boolean {
     return true;
   }
 
-  return env['TERM_PROGRAM'] === 'ghostty';
+  return DISPLAY_PALETTE_TERM_PROGRAMS.has(env['TERM_PROGRAM'] ?? '');
 }
 
 export function setDefaultTerminalBackground(color: string): string {

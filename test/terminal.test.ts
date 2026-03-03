@@ -24,6 +24,7 @@ test('shouldUseSynchronizedOutput defaults to Ghostty and honors overrides', () 
 
 test('shouldUseDisplayPalette defaults to Ghostty and honors overrides', () => {
   assert.equal(shouldUseDisplayPalette({ TERM_PROGRAM: 'ghostty' }), true);
+  assert.equal(shouldUseDisplayPalette({ TERM_PROGRAM: 'Apple_Terminal' }), true);
   assert.equal(shouldUseDisplayPalette({ TERM_PROGRAM: 'ghostty', PARSELY_DISPLAY_PALETTE: '0' }), false);
   assert.equal(shouldUseDisplayPalette({ TERM_PROGRAM: 'Apple_Terminal', PARSELY_DISPLAY_PALETTE: '1' }), true);
 });
