@@ -5,10 +5,45 @@ const ST = '\u001B\\';
 
 type EnvMap = Record<string, string | undefined>;
 
+const SYNCHRONIZED_OUTPUT_TERM_PROGRAMS = new Set([
+  'ghostty',
+  'WezTerm',
+]);
+
+const SYNCHRONIZED_OUTPUT_TERMS = [
+  'xterm-kitty',
+  'xterm-ghostty',
+];
+
 const DISPLAY_PALETTE_TERM_PROGRAMS = new Set([
   'ghostty',
   'Apple_Terminal',
+  'iTerm.app',
+  'WezTerm',
+  'WarpTerminal',
 ]);
+
+const DISPLAY_PALETTE_TERMS = [
+  'alacritty',
+  'foot',
+  'foot-extra',
+  'xterm-ghostty',
+  'xterm-kitty',
+];
+
+function getTerm(env: EnvMap): string {
+  return env['TERM']?.toLowerCase() ?? '';
+}
+
+function isMultiplexer(env: EnvMap): boolean {
+  const term = getTerm(env);
+  return Boolean(env['TMUX'] || env['STY'] || term.startsWith('screen') || term.startsWith('tmux'));
+}
+
+function isPaletteBlocked(env: EnvMap): boolean {
+  const term = getTerm(env);
+  return term === 'dumb' || term === 'linux' || env['TERM_PROGRAM'] === 'vscode' || env['TERMINAL_EMULATOR'] === 'JetBrains-JediTerm' || isMultiplexer(env);
+}
 
 export function getRenderableHeight(rows: number): number {
   if (!Number.isFinite(rows) || rows <= 1) {
@@ -27,7 +62,17 @@ export function shouldUseSynchronizedOutput(env: EnvMap = process.env): boolean 
     return true;
   }
 
-  return env['TERM_PROGRAM'] === 'ghostty';
+  if (isMultiplexer(env)) {
+    return false;
+  }
+
+  const termProgram = env['TERM_PROGRAM'] ?? '';
+  if (SYNCHRONIZED_OUTPUT_TERM_PROGRAMS.has(termProgram)) {
+    return true;
+  }
+
+  const term = getTerm(env);
+  return SYNCHRONIZED_OUTPUT_TERMS.some((candidate) => term.startsWith(candidate));
 }
 
 export function shouldUseDisplayPalette(env: EnvMap = process.env): boolean {
@@ -39,7 +84,17 @@ export function shouldUseDisplayPalette(env: EnvMap = process.env): boolean {
     return true;
   }
 
-  return DISPLAY_PALETTE_TERM_PROGRAMS.has(env['TERM_PROGRAM'] ?? '');
+  if (isPaletteBlocked(env)) {
+    return false;
+  }
+
+  const termProgram = env['TERM_PROGRAM'] ?? '';
+  if (DISPLAY_PALETTE_TERM_PROGRAMS.has(termProgram)) {
+    return true;
+  }
+
+  const term = getTerm(env);
+  return DISPLAY_PALETTE_TERMS.some((candidate) => term.startsWith(candidate));
 }
 
 export function setDefaultTerminalBackground(color: string): string {
