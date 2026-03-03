@@ -41,7 +41,7 @@ if (args.includes('--help') || args.includes('-h')) {
 
 // Handle --version / -v
 if (args.includes('--version') || args.includes('-v')) {
-  console.log('parsely-cli v2.0.0');
+  console.log('parsely-cli v2.2.0');
   process.exit(0);
 }
 
