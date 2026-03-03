@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
-import { loadConfig } from '../utils/helpers.js';
+import { loadConfig, normalizeRecipeUrl } from '../utils/helpers.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -346,9 +346,16 @@ export async function scrapeRecipe(
   onStatus: (status: ScrapeStatus) => void,
   signal?: AbortSignal,
 ): Promise<Recipe> {
+  const normalizedUrl = normalizeRecipeUrl(url);
+  if (!normalizedUrl) {
+    const error = new Error('Invalid URL. Please enter a valid http or https recipe URL.');
+    onStatus({ phase: 'error', message: error.message });
+    throw error;
+  }
+
   // Phase 1 – browser scraping
   onStatus({ phase: 'browser', message: 'Launching browser\u2026' });
-  const browserResult = await scrapeWithBrowser(url, onStatus, signal);
+  const browserResult = await scrapeWithBrowser(normalizedUrl, onStatus, signal);
 
   if (browserResult) {
     onStatus({ phase: 'done', message: 'Recipe found!', recipe: browserResult });
@@ -359,7 +366,7 @@ export async function scrapeRecipe(
   onStatus({ phase: 'ai', message: 'Falling back to AI scraper\u2026' });
 
   try {
-    const aiResult = await scrapeWithAI(url, signal);
+    const aiResult = await scrapeWithAI(normalizedUrl, signal);
     onStatus({ phase: 'done', message: 'Recipe extracted via AI!', recipe: aiResult });
     return aiResult;
   } catch (error) {

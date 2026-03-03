@@ -50,6 +50,10 @@ export function normalizeRecipeUrl(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
+  if (/^[a-z][a-z\d+.-]*:/i.test(trimmed) && !/^https?:\/\//i.test(trimmed)) {
+    return null;
+  }
+
   const url = /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
   return isValidUrl(url) ? url : null;
 }

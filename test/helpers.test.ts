@@ -27,6 +27,11 @@ test('normalizeRecipeUrl rejects invalid URLs', () => {
   assert.equal(normalizeRecipeUrl('not a url'), null);
 });
 
+test('normalizeRecipeUrl rejects non-http schemes', () => {
+  assert.equal(normalizeRecipeUrl('file:///etc/passwd'), null);
+  assert.equal(normalizeRecipeUrl('javascript:alert(1)'), null);
+});
+
 test('normalizeRecipeUrl rejects empty input', () => {
   assert.equal(normalizeRecipeUrl('   '), null);
 });

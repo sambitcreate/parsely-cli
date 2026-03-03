@@ -4,6 +4,7 @@ import {
   containsBrowserChallenge,
   extractRecipeFromHtml,
   findRecipeJson,
+  scrapeRecipe,
 } from '../src/services/scraper.js';
 
 test('findRecipeJson returns a direct Recipe object', () => {
@@ -104,4 +105,17 @@ test('containsBrowserChallenge detects Cloudflare challenge markup', () => {
     true,
   );
   assert.equal(containsBrowserChallenge('<html><body>recipe page</body></html>'), false);
+});
+
+test('scrapeRecipe rejects non-http urls before scraping starts', async () => {
+  const statuses: string[] = [];
+
+  await assert.rejects(
+    scrapeRecipe('file:///etc/passwd', (status) => {
+      statuses.push(status.message);
+    }),
+    /Invalid URL/,
+  );
+
+  assert.deepEqual(statuses, ['Invalid URL. Please enter a valid http or https recipe URL.']);
 });
