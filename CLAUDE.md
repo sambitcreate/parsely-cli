@@ -35,12 +35,10 @@ The state machine still drives the app, but the screen layout now changes per ph
 
 ```
 <App>
-  <Banner />                    # Status-aware shell header
-  {idle && <Welcome /> + <Panel><URLInput /></Panel> + <PhaseRail />}
-  {scraping && <ScrapingStatus /> + <PhaseRail />}
+  {idle && <LandingScreen />}
+  {scraping && <LoadingScreen />}
   {display && <RecipeCard />}
-  {error && <ErrorDisplay /> + <Panel><URLInput /></Panel> + <PhaseRail />}
-  <Footer />                    # Persistent status + keybind hints
+  {error && <Banner /> + <ErrorDisplay /> + <Panel><URLInput /></Panel> + <PhaseRail /> + <Footer />}
 ```
 
 ### Scraping Pipeline
@@ -48,42 +46,47 @@ The state machine still drives the app, but the screen layout now changes per ph
 1. **Puppeteer** → Launch headless Chrome → navigate → extract HTML
 2. **Cheerio** → Parse HTML → find `<script type="application/ld+json">` → locate Recipe schema
 3. **Parsing status** → Report a dedicated `parsing` phase back to the UI
-4. **OpenAI fallback** → Send URL to `gpt-4o-mini` → parse JSON response
+4. **OpenAI fallback** → Send normalized page content to `gpt-4o-mini` → normalize the JSON response back into the shared `Recipe` shape
 
 The browser path now uses a more browser-like Puppeteer configuration (`userAgent`, `accept-language`, and a small webdriver-masking shim) because some recipe sites return Cloudflare challenges to the default headless setup.
 
 ### Terminal Behavior
 
-- `src/cli.tsx` enters the terminal alternate screen before rendering Ink and restores it after exit
-- `src/cli.tsx` enables synchronized output in Ghostty so repaint-heavy status updates render atomically
+- `src/cli.tsx` enters the terminal alternate screen before rendering Ink, restores it after exit, and explicitly resets the terminal background color on shutdown
+- `src/cli.tsx` enables synchronized output in terminals that are known to support DECSET 2026 reliably (`ghostty`, `WezTerm`, and Kitty-style `TERM` values)
 - `useTerminalViewport()` reads live terminal width/height from Ink stdout and updates layout on resize
 - `src/utils/terminal.ts` keeps the Ink tree one row shorter than the terminal so Ink stays on its incremental-update path instead of clearing the entire screen on each render
+- `src/utils/terminal.ts` also gates advanced terminal features by environment so palette changes are enabled only for terminals we explicitly support, and are disabled inside multiplexers such as `tmux` and `screen`
 - `src/app.tsx` collapses non-essential panels on shorter terminals so the URL input remains visible and usable
-- `src/components/URLInput.tsx` strips pasted CR/LF characters and treats `Enter` as submit even when the paste stream is messy
+- `src/components/URLInput.tsx` strips pasted CR/LF characters, treats `Enter` as submit, and shows `Ctrl+C` / `Ctrl+T` hints directly under the field
 - `src/app.tsx` owns an `AbortController` for the active scrape so `Ctrl+C` can abort browser or AI work before exiting
+- `src/app.tsx` owns the active theme mode, auto-detects light/dark preference on startup, and lets `Ctrl+T` toggle the full app theme across all screens
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/cli.tsx` | Entry point — parses `--help`, `--version`, optional URL arg |
-| `src/app.tsx` | Root component — app shell, layout switching, orchestrates phases |
-| `src/theme.ts` | Color palette, symbols — single source of truth for styling |
+| `src/app.tsx` | Root component — theme mode, layout switching, phase orchestration |
+| `src/theme.ts` | Theme registry, theme-mode detection, symbols — single source of truth for styling |
 | `src/services/scraper.ts` | All scraping logic — Puppeteer, Cheerio, OpenAI |
 | `src/utils/helpers.ts` | ISO duration parser, URL validation, env config, URL host formatting |
-| `src/utils/terminal.ts` | Terminal render-height policy and synchronized-output helpers |
+| `src/utils/terminal.ts` | Terminal capability detection, render-height policy, synchronized-output, palette helpers |
 | `src/hooks/useTerminalViewport.ts` | Terminal resize tracking |
+| `src/hooks/useDisplayPalette.ts` | Root-level hook that applies and resets the active terminal background color |
 | `src/components/Banner.tsx` | Shell header with status badge and current host |
 | `src/components/Panel.tsx` | Shared bordered panel primitive |
 | `src/components/PhaseRail.tsx` | Pipeline view for browser, parsing, and AI stages |
 | `src/components/URLInput.tsx` | Bordered text input with validation and newline-safe submit handling |
 | `src/components/RecipeCard.tsx` | Responsive recipe deck — summary, timing, ingredients, instructions |
-| `src/components/ScrapingStatus.tsx` | Live status panel with animated spinner and stage messaging |
+| `src/components/LandingScreen.tsx` | Idle landing screen with Parsely wordmark and centered URL input |
+| `src/components/LoadingScreen.tsx` | Minimal loading state shown between landing and recipe display |
 | `src/components/Footer.tsx` | Status line and dynamic keybind hints based on current phase |
-| `src/components/Welcome.tsx` | Idle-phase onboarding panels |
 | `src/components/ErrorDisplay.tsx` | Error recovery panel with troubleshooting guidance |
 | `test/helpers.test.ts` | Input normalization and URL validation coverage |
 | `test/scraper.test.ts` | Schema extraction and challenge detection coverage |
+| `test/theme.test.ts` | Theme-mode detection and toggle coverage |
+| `test/terminal.test.ts` | Terminal compatibility matrix and palette/sync helper coverage |
 
 ## Development Commands
 
@@ -99,7 +102,9 @@ npm test               # Run helper and scraper unit tests
 ## Environment Variables
 
 - `OPENAI_API_KEY` — Required for AI fallback. Set in `.env.local` file.
-- `PARSELY_SYNC_OUTPUT` — Optional override for synchronized-output terminal writes (`1` forces on, `0` forces off). Ghostty enables this automatically.
+- `PARSELY_SYNC_OUTPUT` — Optional override for synchronized-output terminal writes (`1` forces on, `0` forces off).
+- `PARSELY_DISPLAY_PALETTE` — Optional override for terminal background palette writes (`1` forces on, `0` forces off).
+- `PARSELY_THEME` — Optional startup theme override (`light` or `dark`).
 
 ## Design Decisions
 
@@ -107,7 +112,10 @@ npm test               # Run helper and scraper unit tests
 - **Phase-based state** — A simple state machine (`idle | scraping | display | error`) keeps the UI predictable.
 - **Alternate screen shell** — Parsely behaves like a focused terminal app, not a command that leaves the UI in shell history. The screen switch is handled in `src/cli.tsx`, outside the React tree, to avoid corrupting Ink's render cycle.
 - **Stable repaint path** — Ink v5 clears the whole terminal when rendered output fills the viewport, so Parsely deliberately leaves one row free to stay on incremental updates and reduce flicker in terminals like Ghostty.
-- **Ghostty sync output** — Parsely wraps Ink's stdout in Ghostty with synchronized-output escape codes so each frame is painted as one atomic update. `PARSELY_SYNC_OUTPUT=1` forces this on for other terminals and `PARSELY_SYNC_OUTPUT=0` disables it.
+- **Theme at the app root** — The active palette is applied once from `App` so all screens share the same background and theme toggle behavior.
+- **Conservative terminal capability detection** — Palette updates are enabled only for terminals we explicitly recognize as safe defaults, and synchronized output is narrower still. Multiplexers and embedded terminals are treated as opt-in to avoid protocol regressions.
+- **Synchronized output** — Parsely wraps Ink's stdout with DECSET 2026 escape codes only for terminals we explicitly trust for it. `PARSELY_SYNC_OUTPUT=1` forces this on and `PARSELY_SYNC_OUTPUT=0` disables it.
+- **Display palette override** — Parsely writes OSC background-color sequences only in supported terminals or when explicitly forced with `PARSELY_DISPLAY_PALETTE=1`.
 - **Callback-driven scraping** — The scraper accepts an `onStatus` callback so the TUI can show real-time progress without polling.
 - **Explicit pipeline UI** — Browser fetch, parsing, and AI fallback are surfaced as distinct stages so users can see which path produced the recipe.
 - **Defensive input handling** — URL submission is handled locally in `URLInput`, with CR/LF sanitization so paste-plus-enter works reliably in real terminals.
@@ -136,7 +144,7 @@ npm test               # Run helper and scraper unit tests
 
 ### Modifying the theme
 
-Edit `src/theme.ts` — all components reference this module, so changes propagate everywhere. Keep colors warm and high-contrast enough for terminal rendering.
+Edit `src/theme.ts` — the module now defines both light and dark themes, startup detection, and toggle helpers. Keep the Parsely green accent stable across modes and make sure `recipePaper` remains suitable for terminal background application.
 
 ## Testing
 
@@ -149,4 +157,5 @@ npm test
 The current suite focuses on pure helpers rather than Ink rendering:
 - `test/helpers.test.ts` covers URL normalization and pasted newline sanitization
 - `test/scraper.test.ts` covers JSON-LD extraction and challenge-page detection
-- `test/terminal.test.ts` covers render-height buffering and synchronized-output helpers
+- `test/theme.test.ts` covers theme detection and `Ctrl+T` toggle helpers
+- `test/terminal.test.ts` covers render-height buffering, synchronized-output detection, palette detection, and env-matrix compatibility cases for common macOS and Linux terminals

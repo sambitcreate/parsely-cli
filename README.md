@@ -39,24 +39,34 @@ Optional terminal tuning:
 ```bash
 export PARSELY_SYNC_OUTPUT=1   # force synchronized output on
 export PARSELY_SYNC_OUTPUT=0   # force synchronized output off
+export PARSELY_DISPLAY_PALETTE=1   # force terminal background palette on
+export PARSELY_DISPLAY_PALETTE=0   # force terminal background palette off
+export PARSELY_THEME=dark      # start in dark theme
+export PARSELY_THEME=light     # start in light theme
 ```
 
 ## Terminal UI
 
 - Uses an Ink-based app shell instead of printing one-off output
 - Switches into the terminal alternate screen from the CLI entrypoint and restores the previous screen on exit
+- Restores the terminal's default background color on exit after using the app palette
 - Reserves one terminal row so Ink can update incrementally instead of clearing the whole screen on every spinner tick
 - Adapts the layout to the current terminal size for wide and narrow viewports
 - Collapses non-essential panels on shorter terminals so the URL field stays usable
 - Cancels in-flight browser and AI scraping when you press `Ctrl+C`
 - Shows a live scraping pipeline so browser parsing and AI fallback are visible as separate stages
-- Enables synchronized output in Ghostty by default so frame updates paint atomically
+- Detects light/dark preference on startup and applies a matching app-wide theme
+- Lets you toggle the full app theme at runtime with `Ctrl+T`
+- Enables synchronized output in Ghostty and WezTerm by default so frame updates paint atomically
+- Applies the terminal background palette by default in Ghostty, Apple Terminal, iTerm2, WezTerm, Warp, Kitty, Alacritty, and foot
+- Avoids advanced palette/sync behavior in `tmux`, `screen`, VS Code's integrated terminal, JetBrains terminals, the Linux console, and `TERM=dumb` unless you explicitly override it
 
 ## Keyboard Shortcuts
 
 | Key      | Action            |
 | -------- | ----------------- |
 | `Enter`  | Submit URL        |
+| `Ctrl+T` | Toggle theme      |
 | `n`      | Scrape new recipe |
 | `q`      | Quit              |
 | `Esc`    | Quit from result view |
@@ -68,7 +78,9 @@ export PARSELY_SYNC_OUTPUT=0   # force synchronized output off
 - **Browser scraping skipped** — Install Chrome or Chromium for better results
 - **No recipe found** — AI fallback handles most sites, but results vary by site
 - **Terminal looks cleared while running** — Expected; Parsely uses the alternate screen and restores your previous terminal content when it exits
-- **Ghostty still flickers** — Parsely enables synchronized output automatically in Ghostty; set `PARSELY_SYNC_OUTPUT=1` to force it on elsewhere or `PARSELY_SYNC_OUTPUT=0` to disable it
+- **Background color does not change** — Your terminal may be outside the built-in compatibility list or behind a multiplexer. Use `PARSELY_DISPLAY_PALETTE=1` to force palette updates on, or `PARSELY_DISPLAY_PALETTE=0` to disable them entirely
+- **Theme starts in the wrong mode** — Set `PARSELY_THEME=dark` or `PARSELY_THEME=light` to override automatic detection
+- **Ghostty or WezTerm still flickers** — Parsely enables synchronized output automatically there; set `PARSELY_SYNC_OUTPUT=1` to force it on elsewhere or `PARSELY_SYNC_OUTPUT=0` to disable it
 - **Some sites challenge headless browsers** — Parsely now uses a more browser-like Puppeteer setup, but challenge pages can still force an AI fallback
 
 ## License
@@ -113,14 +125,16 @@ npm test
 
 ### UI Structure
 
+- `LandingScreen` — centered logo and input for the idle state
+- `LoadingScreen` — minimal centered status view during scraping
 - `Banner` — status-aware header with current host and app state
-- `Panel` — shared bordered container used across the app shell
+- `Panel` — shared bordered container used across the error shell
 - `PhaseRail` — pipeline view for browser, parsing, and AI stages
-- `URLInput` — normalizes pasted newlines and submits on `Enter`
+- `URLInput` — normalizes pasted newlines and exposes shortcut hints under the field
 - `RecipeCard` — split recipe layout with summary, ingredients, timing, and method
-- `Footer` — persistent status line and key hints
+- `Footer` — persistent status line and key hints on non-landing screens
 - `useTerminalViewport` — terminal sizing and resize tracking
-- `utils/terminal.ts` — synchronized-output and render-height helpers for stable full-screen updates
+- `utils/terminal.ts` — terminal compatibility detection, synchronized-output, palette control, and render-height helpers
 
 ### Tests
 
@@ -128,7 +142,7 @@ npm test
 npm test
 ```
 
-The test suite covers input normalization and the pure HTML/schema extraction helpers used by the scraper.
+The test suite covers input normalization, schema extraction, theme-mode helpers, and terminal compatibility detection for common macOS and Linux terminals.
 
 ### Build & Publish
 
