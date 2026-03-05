@@ -1,6 +1,6 @@
 {
   "name": "@sambitcreate/parsely-cli",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "A smart recipe scraper CLI with interactive TUI built on Ink",
   "type": "module",
   "main": "dist/cli.js",
@@ -43,20 +43,20 @@
   },
   "homepage": "https://github.com/sambitcreate/parsely-cli#readme",
   "dependencies": {
-    "cheerio": "^1.0.0",
     "cfonts": "^3.1.1",
+    "cheerio": "^1.0.0",
     "dotenv": "^16.4.7",
     "ink": "^5.1.0",
     "ink-big-text": "^2.0.0",
     "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
     "openai": "^4.82.0",
-    "puppeteer-core": "^24.2.1",
+    "puppeteer-core": "^24.38.0",
     "react": "^18.3.1"
   },
   "devDependencies": {
-    "@types/react": "^18.3.18",
     "@types/ink-big-text": "^1.2.4",
+    "@types/react": "^18.3.28",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   },
