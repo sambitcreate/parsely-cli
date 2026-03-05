@@ -35,7 +35,7 @@ const BROWSER_ARGS = [
 
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+  '(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36';
 
 const PAGE_TIMEOUT_MS = 20_000;
 const NETWORK_IDLE_TIMEOUT_MS = 5_000;
@@ -265,7 +265,9 @@ async function configurePage(page: Awaited<ReturnType<Awaited<ReturnType<typeof 
   await page.evaluateOnNewDocument(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => false });
     Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => Object.assign([{}, {}, {}], { length: 3, refresh: () => {} }),
+    });
   });
 }
 
