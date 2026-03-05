@@ -89,3 +89,15 @@ export function isValidUrl(url: string): boolean {
     return false;
   }
 }
+
+export type AppPhase = 'idle' | 'scraping' | 'display' | 'error';
+
+export function buildOccurrenceKeys(items: string[]): string[] {
+  const counts = new Map<string, number>();
+
+  return items.map((item) => {
+    const count = (counts.get(item) ?? 0) + 1;
+    counts.set(item, count);
+    return `${item}-${count}`;
+  });
+}

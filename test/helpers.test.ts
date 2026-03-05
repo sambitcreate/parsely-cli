@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildOccurrenceKeys,
   normalizeRecipeUrl,
   sanitizeSingleLineInput,
   sanitizeTerminalText,
@@ -45,4 +46,12 @@ test('sanitizeTerminalText strips ansi and control sequences', () => {
     sanitizeTerminalText('\u001b]0;spoofed title\u0007Fresh \u001b[31mbasil\u001b[0m'),
     'Fresh basil',
   );
+});
+
+test('buildOccurrenceKeys deduplicates identical items with suffix counts', () => {
+  assert.deepEqual(
+    buildOccurrenceKeys(['a', 'b', 'a', 'c', 'b']),
+    ['a-1', 'b-1', 'a-2', 'c-1', 'b-2'],
+  );
+  assert.deepEqual(buildOccurrenceKeys([]), []);
 });
