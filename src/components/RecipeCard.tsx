@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import BigText from 'ink-big-text';
 import { theme } from '../theme.js';
-import { formatMinutes, getUrlHost, isoToMinutes } from '../utils/helpers.js';
+import { buildOccurrenceKeys, formatMinutes, getUrlHost, isoToMinutes } from '../utils/helpers.js';
 import { wrapText } from '../utils/text-layout.js';
 import type { Recipe } from '../services/scraper.js';
 
@@ -37,16 +37,6 @@ function extractInstructions(recipe: Recipe): string[] {
   }
 
   return steps;
-}
-
-function buildOccurrenceKeys(items: string[]): string[] {
-  const counts = new Map<string, number>();
-
-  return items.map((item) => {
-    const count = (counts.get(item) ?? 0) + 1;
-    counts.set(item, count);
-    return `${item}-${count}`;
-  });
 }
 
 function formatTimeValue(iso?: string): string {
@@ -165,7 +155,6 @@ function buildCompactHeaderLines(
 }
 
 function buildCompactBodyLines(
-  recipe: Recipe,
   sourceHost: string,
   sourceLabel: string,
   sourceCopy: string,
@@ -243,7 +232,6 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
   const compactContentWidth = Math.max(24, width - 4);
   const compactHeaderLines = buildCompactHeaderLines(recipe, sourceHost, compactContentWidth);
   const compactBodyLines = buildCompactBodyLines(
-    recipe,
     sourceHost,
     sourceLabel,
     sourceCopy,

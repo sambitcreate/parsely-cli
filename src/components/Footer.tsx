@@ -1,8 +1,9 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
+import type { AppPhase } from '../utils/helpers.js';
 
-export type AppPhase = 'idle' | 'scraping' | 'display' | 'error';
+export type { AppPhase };
 
 interface FooterProps {
   phase: AppPhase;

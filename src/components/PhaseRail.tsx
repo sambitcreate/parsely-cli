@@ -2,8 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { Recipe, ScrapeStatus } from '../services/scraper.js';
 import { theme } from '../theme.js';
-
-type AppPhase = 'idle' | 'scraping' | 'display' | 'error';
+import type { AppPhase } from '../utils/helpers.js';
 type StepState = 'pending' | 'active' | 'complete' | 'skipped';
 
 interface PhaseRailProps {

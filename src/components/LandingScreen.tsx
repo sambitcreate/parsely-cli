@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { URLInput } from './URLInput.js';
 import { theme } from '../theme.js';
+import { buildOccurrenceKeys } from '../utils/helpers.js';
 
 interface LandingScreenProps {
   width: number;
@@ -69,16 +70,6 @@ function stripCommonIndent(lines: string[]) {
   }
 
   return lines.map((line) => line.slice(indent));
-}
-
-function buildOccurrenceKeys(items: string[]) {
-  const counts = new Map<string, number>();
-
-  return items.map((item) => {
-    const count = (counts.get(item) ?? 0) + 1;
-    counts.set(item, count);
-    return `${item}-${count}`;
-  });
 }
 
 function buildLandingArt(): LandingArt {

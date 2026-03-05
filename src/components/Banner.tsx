@@ -1,9 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
-import { getUrlHost } from '../utils/helpers.js';
-
-type AppPhase = 'idle' | 'scraping' | 'display' | 'error';
+import { getUrlHost, type AppPhase } from '../utils/helpers.js';
 
 interface BannerProps {
   phase: AppPhase;
