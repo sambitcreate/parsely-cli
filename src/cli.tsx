@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import React from 'react';
 import { render } from 'ink';
+import { createRequire } from 'node:module';
 import { App } from './app.js';
 import { sanitizeTerminalText } from './utils/helpers.js';
 import {
@@ -9,6 +10,9 @@ import {
   shouldUseDisplayPalette,
   shouldUseSynchronizedOutput,
 } from './utils/terminal.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json') as { version: string };
 
 const ENTER_ALT_SCREEN = '\u001B[?1049h\u001B[2J\u001B[H';
 const EXIT_ALT_SCREEN = '\u001B[?1049l';
@@ -41,7 +45,7 @@ if (args.includes('--help') || args.includes('-h')) {
 
 // Handle --version / -v
 if (args.includes('--version') || args.includes('-v')) {
-  console.log('parsely-cli v2.2.0');
+  console.log(`parsely-cli v${version}`);
   process.exit(0);
 }
 
