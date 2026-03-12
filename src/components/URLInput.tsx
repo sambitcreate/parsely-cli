@@ -100,13 +100,15 @@ export function URLInput({ onSubmit, onToggleTheme, mode = 'default', width }: U
               <Text color={theme.colors.muted}> </Text>
             </>
           )}
-          <TextInput
-            value={value}
-            focus={true}
-            onChange={handleChange}
-            onSubmit={handleSubmit}
-            placeholder={landing ? 'Paste recipe link here' : 'Enter recipe URL...'}
-          />
+          <Text color={theme.colors.text}>
+            <TextInput
+              value={value}
+              focus={true}
+              onChange={handleChange}
+              onSubmit={handleSubmit}
+              placeholder={landing ? 'Paste recipe link here' : 'Enter recipe URL...'}
+            />
+          </Text>
         </Box>
 
         {landing && (
