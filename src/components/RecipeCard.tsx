@@ -206,14 +206,14 @@ function buildCompactFooter(width: number, scrollOffset: number, maxScroll: numb
   const location = maxScroll > 0 ? `${scrollOffset + 1}/${maxScroll + 1}` : '1/1';
 
   if (width >= 96) {
-    return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  pgup/pgdn jump  ${theme.symbols.dot}  ctrl+t theme  ${theme.symbols.dot}  esc quit  ${theme.symbols.dot}  n new  ${theme.symbols.dot}  q quit`;
+    return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  pgup/pgdn jump  ${theme.symbols.dot}  ctrl+t theme  ${theme.symbols.dot}  n new  ${theme.symbols.dot}  q/esc quit`;
   }
 
   if (width >= 58) {
-    return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  ctrl+t theme  ${theme.symbols.dot}  esc quit`;
+    return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  ctrl+t theme  ${theme.symbols.dot}  q/esc quit`;
   }
 
-  return `ctrl+t theme  ${theme.symbols.dot}  esc quit`;
+  return `ctrl+t theme  ${theme.symbols.dot}  q/esc quit`;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -524,11 +524,7 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
                 <Text color={theme.colors.recipeMuted}> toggle theme</Text>
               </Text>
               <Text color={theme.colors.recipeText} bold>
-                q
-                <Text color={theme.colors.recipeMuted}> quit</Text>
-              </Text>
-              <Text color={theme.colors.recipeText} bold>
-                esc
+                q/esc
                 <Text color={theme.colors.recipeMuted}> quit</Text>
               </Text>
             </SidebarCard>
