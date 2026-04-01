@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import BigText from 'ink-big-text';
 import { theme } from '../theme.js';
-import { buildOccurrenceKeys, formatMinutes, getUrlHost, isoToMinutes } from '../utils/helpers.js';
+import { buildOccurrenceKeys, formatMinutes, getUrlHost } from '../utils/helpers.js';
 import { wrapText } from '../utils/text-layout.js';
 import type { Recipe } from '../services/scraper.js';
 
@@ -39,9 +39,9 @@ function extractInstructions(recipe: Recipe): string[] {
   return steps;
 }
 
-function formatTimeValue(iso?: string): string {
-  if (!iso) return 'Not listed';
-  return formatMinutes(isoToMinutes(iso));
+function formatTimeValue(minutes: number): string {
+  if (minutes <= 0) return 'Not listed';
+  return formatMinutes(minutes);
 }
 
 function buildRule(width: number, maxWidth: number): string {
@@ -141,23 +141,27 @@ function buildCompactHeaderLines(
   sourceHost: string,
   contentWidth: number,
 ): string[] {
-  return [
-    'View original recipe',
-    sourceHost,
-    '',
+  const lines: string[] = [
     ...wrapText(recipe.name ?? 'Untitled recipe', contentWidth),
+    sourceHost,
     '',
     `Prep Time  ${formatTimeValue(recipe.prepTime)}`,
     `Cook Time  ${formatTimeValue(recipe.cookTime)}`,
     `Total Time ${formatTimeValue(recipe.totalTime)}`,
-    '',
   ];
+
+  if (recipe.description) {
+    lines.push('');
+    lines.push(...wrapText(recipe.description, contentWidth));
+  }
+
+  lines.push('');
+  return lines;
 }
 
 function buildCompactBodyLines(
   sourceHost: string,
   sourceLabel: string,
-  sourceCopy: string,
   contentWidth: number,
   ingredients: string[],
   instructions: string[],
@@ -191,11 +195,9 @@ function buildCompactBodyLines(
     });
   }
 
-  lines.push('Recipe brief');
-  lines.push(buildRule(contentWidth, contentWidth));
-  lines.push(...wrapText(`Source: ${sourceLabel}`, contentWidth));
-  lines.push(...wrapText(`Origin: ${sourceHost}`, contentWidth));
-  lines.push(...wrapText(`Status: ${sourceCopy}`, contentWidth));
+  lines.push('');
+  lines.push(...wrapText(`${sourceLabel}  ${theme.symbols.dot}  ${sourceHost}`, contentWidth));
+  lines.push(...wrapText('View original recipe', contentWidth));
 
   return lines;
 }
@@ -226,7 +228,6 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
   const instructionKeys = buildOccurrenceKeys(instructions);
   const sourceHost = getUrlHost(sourceUrl) || 'original page';
   const sourceLabel = recipe.source === 'browser' ? 'Page schema' : 'AI rescue';
-  const sourceCopy = recipe.source === 'browser' ? 'Recovered from page schema' : 'Recovered with AI rescue';
   const constrained = width < 110 || height < 34;
 
   const compactContentWidth = Math.max(24, width - 4);
@@ -234,7 +235,6 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
   const compactBodyLines = buildCompactBodyLines(
     sourceHost,
     sourceLabel,
-    sourceCopy,
     compactContentWidth,
     ingredients,
     instructions,
@@ -274,6 +274,9 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
     }
   }, { isActive: constrained });
 
+  const compactTitleLineCount = wrapText(recipe.name ?? 'Untitled recipe', compactContentWidth).length;
+  const sourceHostLineIndex = compactTitleLineCount;
+
   if (constrained) {
     return (
       <Box flexDirection="column" width="100%" height="100%" paddingX={1}>
@@ -283,15 +286,15 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
               return <Text key={compactHeaderKeys[index]}> </Text>;
             }
 
-            if (index === 0) {
+            if (index < sourceHostLineIndex) {
               return (
-                <Text key={compactHeaderKeys[index]} color={theme.colors.recipeMuted} bold>
+                <Text key={compactHeaderKeys[index]} color={theme.colors.recipeText} bold wrap="wrap">
                   {line}
                 </Text>
               );
             }
 
-            if (index === 1) {
+            if (index === sourceHostLineIndex) {
               return (
                 <Text key={compactHeaderKeys[index]} color={theme.colors.recipeSubtle}>
                   {line}
@@ -299,7 +302,7 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
               );
             }
 
-            if (index >= compactHeaderLines.length - 4 && line.includes('Time')) {
+            if (line.includes('Time')) {
               return (
                 <Text key={compactHeaderKeys[index]} color={theme.colors.recipeText} bold>
                   {line}
@@ -308,7 +311,7 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
             }
 
             return (
-              <Text key={compactHeaderKeys[index]} color={theme.colors.recipeText} bold wrap="wrap">
+              <Text key={compactHeaderKeys[index]} color={theme.colors.recipeMuted} wrap="wrap">
                 {line}
               </Text>
             );
@@ -324,7 +327,7 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
               return <Text key={bodyKey}> </Text>;
             }
 
-            const heading = trimmed === 'Ingredients' || trimmed === 'Instructions' || trimmed === 'Recipe brief';
+            const heading = trimmed === 'Ingredients' || trimmed === 'Instructions';
             const rule = trimmed === buildRule(compactContentWidth, compactContentWidth);
 
             return (
@@ -378,15 +381,8 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
       paddingY={1}
     >
       <Box flexDirection="column" flexGrow={1}>
-        <Text color={theme.colors.recipeMuted} bold>
-          View original recipe
-        </Text>
-        <Text color={theme.colors.recipeSubtle}>
-          {sourceHost}
-        </Text>
-
         {showBigTitle ? (
-          <Box marginTop={1} flexDirection="column">
+          <Box flexDirection="column">
             {titleLines.map((line) => (
               <BigText
                 key={line}
@@ -398,22 +394,34 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
             ))}
           </Box>
         ) : (
-          <Box marginTop={1} flexDirection="column">
+          <Box flexDirection="column">
             <Text color={theme.colors.recipeText} bold wrap="wrap">
               {recipe.name ?? 'Untitled recipe'}
             </Text>
           </Box>
         )}
 
+        <Text color={theme.colors.recipeSubtle}>
+          {sourceHost}
+        </Text>
+
         <Box marginTop={1}>
           <Text color={theme.colors.recipeBorder}>{heroRule}</Text>
         </Box>
 
-        <Box flexDirection={compact ? 'column' : 'row'} marginTop={1} marginBottom={2}>
+        <Box flexDirection={compact ? 'column' : 'row'} marginTop={1} marginBottom={recipe.description ? 1 : 2}>
           <Metric label="Prep Time" value={formatTimeValue(recipe.prepTime)} />
           <Metric label="Cook Time" value={formatTimeValue(recipe.cookTime)} />
           <Metric label="Total Time" value={formatTimeValue(recipe.totalTime)} />
         </Box>
+
+        {recipe.description && (
+          <Box marginBottom={2}>
+            <Text color={theme.colors.recipeMuted} wrap="wrap">
+              {recipe.description}
+            </Text>
+          </Box>
+        )}
 
         <Box flexDirection={wide ? 'row' : 'column'} gap={3} flexGrow={1}>
           <Box flexDirection="column" flexGrow={1} width={mainWidth}>
@@ -482,11 +490,23 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
           </Box>
 
           <Box flexDirection="column" width={sidebarWidth} minWidth={wide ? 30 : undefined} marginTop={wide ? 2 : 0}>
-            <SidebarCard title="Recipe brief">
-              <DetailStack label="Source" value={sourceLabel} />
-              <DetailStack label="Origin" value={sourceHost} />
-              <DetailStack label="Status" value={sourceCopy} />
+            <SidebarCard title="Servings">
+              <Text color={theme.colors.recipeText} bold>
+                {recipe.servings}
+              </Text>
             </SidebarCard>
+
+            {recipe.nutrition && (
+              <SidebarCard title="Nutrition">
+                {recipe.nutrition.calories && <DetailStack label="Calories" value={recipe.nutrition.calories} />}
+                {recipe.nutrition.fatContent && <DetailStack label="Fat" value={recipe.nutrition.fatContent} />}
+                {recipe.nutrition.proteinContent && <DetailStack label="Protein" value={recipe.nutrition.proteinContent} />}
+                {recipe.nutrition.carbohydrateContent && <DetailStack label="Carbs" value={recipe.nutrition.carbohydrateContent} />}
+                {recipe.nutrition.fiberContent && <DetailStack label="Fiber" value={recipe.nutrition.fiberContent} />}
+                {recipe.nutrition.sugarContent && <DetailStack label="Sugar" value={recipe.nutrition.sugarContent} />}
+                {recipe.nutrition.sodiumContent && <DetailStack label="Sodium" value={recipe.nutrition.sodiumContent} />}
+              </SidebarCard>
+            )}
 
             <SidebarCard title="Kitchen rhythm">
               <DetailStack label="Ingredients" value={String(ingredients.length)} />
@@ -512,6 +532,12 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
                 <Text color={theme.colors.recipeMuted}> back</Text>
               </Text>
             </SidebarCard>
+
+            <Box marginTop={1}>
+              <Text color={theme.colors.recipeSubtle}>
+                {theme.symbols.arrow} View original recipe {theme.symbols.dot} {sourceHost}
+              </Text>
+            </Box>
           </Box>
         </Box>
       </Box>
