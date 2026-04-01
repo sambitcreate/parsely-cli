@@ -29,7 +29,7 @@ const keybinds: Record<AppPhase, KeyHint[]> = {
     { key: 'n', label: 'new recipe' },
     { key: 'ctrl+t', label: 'theme' },
     { key: 'q', label: 'quit' },
-    { key: 'esc', label: 'back' },
+    { key: 'esc', label: 'quit' },
   ],
   error: [
     { key: 'enter', label: 'retry' },
