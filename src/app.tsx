@@ -17,7 +17,7 @@ import { getRenderableHeight } from './utils/terminal.js';
 import { LandingScreen } from './components/LandingScreen.js';
 import { LoadingScreen } from './components/LoadingScreen.js';
 
-interface AppProps {
+export interface AppProps {
   initialUrl?: string;
 }
 
