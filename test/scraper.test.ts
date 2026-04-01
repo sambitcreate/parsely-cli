@@ -139,11 +139,14 @@ test('normalizeAiRecipe keeps only supported recipe fields', () => {
 
   assert.deepEqual(recipe, {
     name: 'Weeknight Curry',
-    prepTime: 'PT15M',
-    cookTime: undefined,
-    totalTime: undefined,
+    description: undefined,
+    prepTime: 15,
+    cookTime: 0,
+    totalTime: 15,
+    servings: 4,
     recipeIngredient: ['1 onion', '2 tbsp oil'],
     recipeInstructions: [{ itemListElement: [{ text: 'Saute the onion.' }, { text: 'Add the spices.' }] }],
+    nutrition: null,
     source: 'ai',
   });
 });
