@@ -12,6 +12,8 @@ function createMockStdout(isTTY: boolean): MockStdout {
 
   return {
     isTTY,
+    columns: 80,
+    rows: 24,
     writes,
     write(chunk: string | Uint8Array, encoding?: BufferEncoding | ((error?: Error | null) => void), callback?: (error?: Error | null) => void) {
       writes.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
