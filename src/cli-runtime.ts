@@ -1,18 +1,13 @@
 import React, { type ComponentType, type ReactElement } from 'react';
 import { render } from 'ink';
-import { App } from './app.js';
+import { App, type AppProps } from './app.js';
 import {
   createSynchronizedWriteProxy,
   resetDefaultTerminalBackground,
   shouldUseDisplayPalette,
   shouldUseSynchronizedOutput,
+  type EnvMap,
 } from './utils/terminal.js';
-
-type EnvMap = Record<string, string | undefined>;
-
-interface AppComponentProps {
-  initialUrl?: string;
-}
 
 interface InkRenderOptions {
   exitOnCtrlC: boolean;
@@ -26,7 +21,7 @@ interface InkRenderInstance {
 type InkRender = (tree: ReactElement, options: InkRenderOptions) => InkRenderInstance;
 
 export interface CliRuntimeDependencies {
-  AppComponent?: ComponentType<AppComponentProps>;
+  AppComponent?: ComponentType<AppProps>;
   createSynchronizedWriteProxy?: (stdout: NodeJS.WriteStream) => NodeJS.WriteStream;
   env?: EnvMap;
   renderApp?: InkRender;
@@ -67,18 +62,24 @@ export async function runCli(
     });
     await instance.waitUntilExit();
   } finally {
-    const paletteEnabled = useAltScreen && shouldUsePalette(env);
+    // Terminal cleanup is best-effort; a broken pipe or destroyed stream should
+    // not mask the original error that triggered teardown.
+    try {
+      const paletteEnabled = useAltScreen && shouldUsePalette(env);
 
-    if (paletteEnabled) {
-      stdout.write(resetPalette());
-    }
+      if (paletteEnabled) {
+        stdout.write(resetPalette());
+      }
 
-    if (useAltScreen) {
-      stdout.write(EXIT_ALT_SCREEN);
-    }
+      if (useAltScreen) {
+        stdout.write(EXIT_ALT_SCREEN);
+      }
 
-    if (paletteEnabled) {
-      stdout.write(resetPalette());
+      if (paletteEnabled) {
+        stdout.write(resetPalette());
+      }
+    } catch {
+      // Ignore cleanup errors (EPIPE, ERR_STREAM_DESTROYED, etc.)
     }
   }
 }
