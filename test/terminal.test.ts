@@ -70,6 +70,36 @@ test('shouldUseSynchronizedOutput recognizes supported terminal env matrices', (
   }
 });
 
+test('shouldUseSynchronizedOutput applies override and multiplexer precedence correctly', () => {
+  assert.equal(
+    shouldUseSynchronizedOutput({
+      TERM_PROGRAM: 'WezTerm',
+      TERM: 'screen-256color',
+      TMUX: '/tmp/tmux-1000/default,123,0',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldUseSynchronizedOutput({
+      TERM_PROGRAM: 'Apple_Terminal',
+      TERM: 'dumb',
+      PARSELY_SYNC_OUTPUT: '1',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldUseSynchronizedOutput({
+      TERM_PROGRAM: 'ghostty',
+      TERM: 'xterm-ghostty',
+      PARSELY_SYNC_OUTPUT: '0',
+    }),
+    false,
+  );
+  assert.equal(shouldUseSynchronizedOutput({ TERM: 'tmux-256color' }), false);
+  assert.equal(shouldUseSynchronizedOutput({ TERM: 'xterm-kitty-256color' }), true);
+  assert.equal(shouldUseSynchronizedOutput({ TERM_PROGRAM: 'WezTerm', STY: '1234' }), false);
+});
+
 test('shouldUseDisplayPalette recognizes macOS and linux terminal env matrices', () => {
   const cases = [
     {
@@ -153,6 +183,35 @@ test('shouldUseDisplayPalette defaults and overrides behave as expected', () => 
   assert.equal(shouldUseDisplayPalette({ TERM_PROGRAM: 'Apple_Terminal', PARSELY_DISPLAY_PALETTE: '1' }), true);
 });
 
+test('shouldUseDisplayPalette applies override and blocking precedence correctly', () => {
+  assert.equal(
+    shouldUseDisplayPalette({
+      TERM_PROGRAM: 'iTerm.app',
+      TERM: 'screen-256color',
+      TMUX: '/tmp/tmux-1000/default,123,0',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldUseDisplayPalette({
+      TERM: 'dumb',
+      PARSELY_DISPLAY_PALETTE: '1',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldUseDisplayPalette({
+      TERM_PROGRAM: 'Apple_Terminal',
+      TERM: 'xterm-256color',
+      PARSELY_DISPLAY_PALETTE: '0',
+    }),
+    false,
+  );
+  assert.equal(shouldUseDisplayPalette({ TERM: 'foot-extra' }), true);
+  assert.equal(shouldUseDisplayPalette({ TERM: 'tmux-256color' }), false);
+  assert.equal(shouldUseDisplayPalette({ TERM: 'screen-256color', STY: '1234' }), false);
+});
+
 test('display palette helpers emit xterm-compatible background sequences', () => {
   assert.equal(setDefaultTerminalBackground('#FDFFF7'), '\u001B]11;#FDFFF7\u001B\\');
   assert.equal(resetDefaultTerminalBackground(), '\u001B]111\u001B\\');
@@ -179,4 +238,51 @@ test('createSynchronizedWriteProxy wraps output in synchronized paint escapes', 
   await new Promise((resolve) => stdout.on('finish', resolve));
 
   assert.deepEqual(chunks, ['\u001B[?2026hhello\u001B[?2026l']);
+});
+
+test('createSynchronizedWriteProxy wraps buffer writes and preserves callback signatures', () => {
+  const calls: Array<{ chunk: string | Uint8Array; encoding?: BufferEncoding }> = [];
+
+  class RecordingStdout {
+    columns = 80;
+    rows = 24;
+    isTTY = true;
+
+    write(
+      chunk: string | Uint8Array,
+      encoding?: BufferEncoding | ((error?: Error | null) => void),
+      callback?: (error?: Error | null) => void,
+    ) {
+      calls.push({
+        chunk,
+        encoding: typeof encoding === 'string' ? encoding : undefined,
+      });
+
+      if (typeof encoding === 'function') {
+        encoding();
+      } else {
+        callback?.();
+      }
+
+      return true;
+    }
+  }
+
+  const stdout = new RecordingStdout() as unknown as NodeJS.WriteStream;
+  const proxy = createSynchronizedWriteProxy(stdout);
+  let bufferCallbackCalled = false;
+  let stringCallbackCalled = false;
+
+  proxy.write(Buffer.from('hello'), () => {
+    bufferCallbackCalled = true;
+  });
+  proxy.write('world', 'utf8', () => {
+    stringCallbackCalled = true;
+  });
+
+  assert.equal(bufferCallbackCalled, true);
+  assert.equal(stringCallbackCalled, true);
+  assert.equal(Buffer.from(calls[0].chunk).toString('utf8'), '\u001B[?2026hhello\u001B[?2026l');
+  assert.equal(calls[1].chunk, '\u001B[?2026hworld\u001B[?2026l');
+  assert.equal(calls[1].encoding, 'utf8');
 });
