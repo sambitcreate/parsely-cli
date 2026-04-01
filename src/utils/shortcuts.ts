@@ -1,5 +1,6 @@
 interface ShortcutKey {
   ctrl?: boolean;
+  escape?: boolean;
 }
 
 function toCtrlCharacter(letter: string): string {
@@ -24,4 +25,8 @@ export function isCtrlShortcut(
 
 export function isThemeToggleShortcut(input: string, key: ShortcutKey): boolean {
   return isCtrlShortcut(input, key, 't');
+}
+
+export function isDisplayQuitShortcut(input: string, key: ShortcutKey): boolean {
+  return key.escape === true || input.toLowerCase() === 'q';
 }
