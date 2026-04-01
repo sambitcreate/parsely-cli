@@ -12,7 +12,7 @@ import { useTerminalViewport } from './hooks/useTerminalViewport.js';
 import { detectPreferredThemeMode, resolveInitialThemeMode, setActiveTheme, theme, toggleThemeMode, type ThemeMode } from './theme.js';
 import { useDisplayPalette } from './hooks/useDisplayPalette.js';
 import { sanitizeTerminalText } from './utils/helpers.js';
-import { isThemeToggleShortcut } from './utils/shortcuts.js';
+import { isDisplayQuitShortcut, isThemeToggleShortcut } from './utils/shortcuts.js';
 import { getRenderableHeight } from './utils/terminal.js';
 import { LandingScreen } from './components/LandingScreen.js';
 import { LoadingScreen } from './components/LoadingScreen.js';
@@ -141,9 +141,14 @@ export function App({ initialUrl }: AppProps) {
       return;
     }
 
-    if (phase === 'display' && input === 'n') handleNewRecipe();
-    if (phase === 'display' && input === 'q') exit();
-    if (phase === 'display' && key.escape) handleNewRecipe();
+    if (phase === 'display' && input === 'n') {
+      handleNewRecipe();
+      return;
+    }
+
+    if (phase === 'display' && isDisplayQuitShortcut(input, key)) {
+      exit();
+    }
   }, { isActive: phase === 'display' || phase === 'scraping' || phase === 'idle' || phase === 'error' });
 
   const renderIdle = () => (
