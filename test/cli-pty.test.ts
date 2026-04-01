@@ -18,8 +18,9 @@ function buildSmokeCommand(): string {
     .map(shellQuote)
     .join(' ');
 
+  // Trap ensures the background CLI is killed even if the parent shell is terminated.
   // Give Ink enough time to mount in the PTY before simulating Ctrl+C as SIGINT.
-  return `${cliCommand} & pid=$!; sleep 4; kill -INT "$pid" 2>/dev/null || true; wait "$pid"`;
+  return `trap 'kill "$pid" 2>/dev/null' EXIT; ${cliCommand} & pid=$!; sleep 4; kill -INT "$pid" 2>/dev/null || true; wait "$pid"`;
 }
 
 function buildScriptArgs(command: string): string[] {
