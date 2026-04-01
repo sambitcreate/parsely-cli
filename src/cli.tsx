@@ -1,21 +1,10 @@
 #!/usr/bin/env node
-import React from 'react';
-import { render } from 'ink';
 import { createRequire } from 'node:module';
-import { App } from './app.js';
 import { sanitizeTerminalText } from './utils/helpers.js';
-import {
-  createSynchronizedWriteProxy,
-  resetDefaultTerminalBackground,
-  shouldUseDisplayPalette,
-  shouldUseSynchronizedOutput,
-} from './utils/terminal.js';
+import { runCli } from './cli-runtime.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
-
-const ENTER_ALT_SCREEN = '\u001B[?1049h\u001B[2J\u001B[H';
-const EXIT_ALT_SCREEN = '\u001B[?1049l';
 
 // Simple arg parsing – accept an optional recipe URL as the first positional arg
 const args = process.argv.slice(2);
@@ -50,34 +39,7 @@ if (args.includes('--version') || args.includes('-v')) {
 }
 
 async function main() {
-  const useAltScreen = process.stdout.isTTY;
-  const inkStdout = useAltScreen && shouldUseSynchronizedOutput()
-    ? createSynchronizedWriteProxy(process.stdout)
-    : process.stdout;
-
-  if (useAltScreen) {
-    process.stdout.write(ENTER_ALT_SCREEN);
-  }
-
-  try {
-    const instance = render(<App initialUrl={url} />, {
-      exitOnCtrlC: false,
-      stdout: inkStdout,
-    });
-    await instance.waitUntilExit();
-  } finally {
-    if (useAltScreen && shouldUseDisplayPalette()) {
-      process.stdout.write(resetDefaultTerminalBackground());
-    }
-
-    if (useAltScreen) {
-      process.stdout.write(EXIT_ALT_SCREEN);
-    }
-
-    if (useAltScreen && shouldUseDisplayPalette()) {
-      process.stdout.write(resetDefaultTerminalBackground());
-    }
-  }
+  await runCli(url);
 }
 
 main().catch((error) => {
