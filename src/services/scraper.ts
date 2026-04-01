@@ -3,19 +3,32 @@ import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import { constants as fsConstants } from 'node:fs';
 import { access } from 'node:fs/promises';
-import { loadConfig, normalizeRecipeUrl, sanitizeTerminalText } from '../utils/helpers.js';
+import { isoToMinutes, loadConfig, normalizeRecipeUrl, sanitizeTerminalText } from '../utils/helpers.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+export interface NutritionInfo {
+  calories?: string | null;
+  fatContent?: string | null;
+  proteinContent?: string | null;
+  carbohydrateContent?: string | null;
+  fiberContent?: string | null;
+  sugarContent?: string | null;
+  sodiumContent?: string | null;
+}
+
 export interface Recipe {
   name?: string;
-  prepTime?: string;
-  cookTime?: string;
-  totalTime?: string;
+  description?: string;
+  prepTime: number;
+  cookTime: number;
+  totalTime: number;
+  servings: number;
   recipeIngredient?: string[];
   recipeInstructions?: Array<string | { text?: string; itemListElement?: Array<{ text?: string }> }>;
+  nutrition?: NutritionInfo | null;
   source: 'browser' | 'ai';
 }
 
@@ -162,6 +175,63 @@ function normalizeInstructions(
   return single ? [single] : undefined;
 }
 
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function parseTimeField(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.round(value));
+  }
+  if (typeof value === 'string') {
+    const mins = isoToMinutes(value.trim());
+    return mins >= 0 ? mins : 0;
+  }
+  return 0;
+}
+
+function parseServings(value: unknown): number {
+  const n = toFiniteNumber(value);
+  if (n != null && n > 0) return Math.round(n);
+  if (typeof value === 'string') {
+    const match = value.match(/(\d+)/);
+    if (match) return parseInt(match[1], 10);
+  }
+  if (Array.isArray(value) && value.length > 0) {
+    return parseServings(value[0]);
+  }
+  return 4;
+}
+
+function normalizeNutrition(value: unknown): NutritionInfo | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+
+  const pick = (key: string): string | null => {
+    const v = raw[key];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    return null;
+  };
+
+  const info: NutritionInfo = {
+    calories: pick('calories'),
+    fatContent: pick('fatContent'),
+    proteinContent: pick('proteinContent'),
+    carbohydrateContent: pick('carbohydrateContent'),
+    fiberContent: pick('fiberContent'),
+    sugarContent: pick('sugarContent'),
+    sodiumContent: pick('sodiumContent'),
+  };
+
+  const hasAny = Object.values(info).some(Boolean);
+  return hasAny ? info : null;
+}
+
 function normalizeRecipePayload(
   recipe: Record<string, unknown>,
   source: Recipe['source'],
@@ -172,13 +242,21 @@ function normalizeRecipePayload(
         .filter((item): item is string => Boolean(item))
     : undefined;
 
+  const prepTime = parseTimeField(recipe.prepTime);
+  const cookTime = parseTimeField(recipe.cookTime);
+  const totalTime = parseTimeField(recipe.totalTime) ||
+    (prepTime || cookTime ? prepTime + cookTime : 0);
+
   return {
     name: normalizeText(recipe.name),
-    prepTime: typeof recipe.prepTime === 'string' ? sanitizeTerminalText(recipe.prepTime.trim()) : undefined,
-    cookTime: typeof recipe.cookTime === 'string' ? sanitizeTerminalText(recipe.cookTime.trim()) : undefined,
-    totalTime: typeof recipe.totalTime === 'string' ? sanitizeTerminalText(recipe.totalTime.trim()) : undefined,
+    description: normalizeText(recipe.description),
+    prepTime,
+    cookTime,
+    totalTime,
+    servings: parseServings(recipe.recipeYield ?? recipe.yield ?? recipe.servings),
     recipeIngredient,
     recipeInstructions: normalizeInstructions(recipe.recipeInstructions),
+    nutrition: normalizeNutrition(recipe.nutrition),
     source,
   };
 }
@@ -194,6 +272,7 @@ export function normalizeAiRecipe(recipe: Record<string, unknown>): Recipe {
 function hasRecipeContent(recipe: Recipe): boolean {
   return Boolean(
     recipe.name ||
+      recipe.description ||
       recipe.prepTime ||
       recipe.cookTime ||
       recipe.totalTime ||
@@ -415,6 +494,17 @@ async function scrapeWithBrowser(
   }
 }
 
+const AI_SYSTEM_PROMPT =
+  'You are a precise recipe extractor. Return strictly minified JSON with keys: ' +
+  'name, description, prepTime, cookTime, totalTime, servings, recipeIngredient, recipeInstructions, nutrition. ' +
+  'Units: time values in minutes as numbers (e.g. 30, not "PT30M"); servings as a single number. ' +
+  'recipeIngredient: array of plain strings (e.g. ["2 cups flour", "1 tsp salt"]). ' +
+  'recipeInstructions: array of plain strings, one per step. ' +
+  'nutrition: {calories, fatContent, proteinContent, carbohydrateContent, fiberContent, sugarContent, sodiumContent} ' +
+  '(all optional strings, include units e.g. "25g", "500 calories"). Set nutrition to null if not available. ' +
+  'If information is missing, use reasonable defaults (0 for times, 4 for servings). ' +
+  'Use only the provided page content. Do not invent data.';
+
 async function scrapeWithAI(url: string, pageSource: string, signal?: AbortSignal): Promise<Recipe> {
   throwIfAborted(signal);
   const { openaiApiKey } = loadConfig();
@@ -431,12 +521,11 @@ async function scrapeWithAI(url: string, pageSource: string, signal?: AbortSigna
   try {
     response = await client.chat.completions.create({
       model: 'gpt-4o-mini',
+      temperature: 0.2,
       messages: [
         {
           role: 'system',
-          content:
-            'You extract recipe data from supplied page content. Use only the provided page content. ' +
-            'Return a JSON object with optional name, prepTime, cookTime, totalTime, recipeIngredient, and recipeInstructions fields.',
+          content: AI_SYSTEM_PROMPT,
         },
         {
           role: 'user',
