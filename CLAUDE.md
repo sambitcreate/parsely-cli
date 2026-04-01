@@ -73,6 +73,8 @@ The browser path now uses a more browser-like Puppeteer configuration (`userAgen
 | `src/services/scraper.ts` | All scraping logic — Puppeteer, Cheerio, OpenAI |
 | `src/utils/helpers.ts` | ISO duration parser, URL validation, env config, URL host formatting |
 | `src/utils/terminal.ts` | Terminal capability detection, render-height policy, synchronized-output, palette helpers |
+| `src/utils/text-layout.ts` | Word-wrapping with hanging indentation for scrollable recipe text |
+| `src/utils/shortcuts.ts` | Ctrl+letter matching helpers (`isCtrlShortcut`, `isThemeToggleShortcut`, `isDisplayQuitShortcut`) |
 | `src/hooks/useTerminalViewport.ts` | Terminal resize tracking |
 | `src/hooks/useDisplayPalette.ts` | Root-level hook that applies and resets the active terminal background color |
 | `src/components/Banner.tsx` | Shell header with status badge and current host |
@@ -89,6 +91,8 @@ The browser path now uses a more browser-like Puppeteer configuration (`userAgen
 | `test/theme.test.ts` | Theme-mode detection and toggle coverage |
 | `test/terminal.test.ts` | Terminal compatibility matrix and palette/sync helper coverage |
 | `test/cli-runtime.test.ts` | CLI runtime unit tests with mock stdout and render |
+| `test/shortcuts.test.ts` | Ctrl shortcut detection helper coverage |
+| `test/text-layout.test.ts` | Word-wrapping with hanging indentation coverage |
 | `test/cli-pty.test.ts` | PTY integration test for alt-screen escapes via script(1) |
 
 ## Development Commands
@@ -108,6 +112,9 @@ npm test               # Run helper and scraper unit tests
 - `PARSELY_SYNC_OUTPUT` — Optional override for synchronized-output terminal writes (`1` forces on, `0` forces off).
 - `PARSELY_DISPLAY_PALETTE` — Optional override for terminal background palette writes (`1` forces on, `0` forces off).
 - `PARSELY_THEME` — Optional startup theme override (`light` or `dark`).
+- `PUPPETEER_EXECUTABLE_PATH` — Custom path to Chrome/Chromium binary (overrides auto-detection).
+- `CHROME_PATH` — Alternative custom Chrome path used by `findChrome()` in the scraper.
+- `COLORFGBG` — Checked by `resolveInitialThemeMode()` to infer light/dark preference from ANSI terminal color codes before async macOS detection completes.
 
 ## Design Decisions
 
@@ -127,6 +134,13 @@ npm test               # Run helper and scraper unit tests
 - **Puppeteer first, AI second** — Browser scraping is more reliable and doesn't require an API key. AI is the fallback, not the default. Uses `puppeteer-core` with auto-detection of system Chrome to avoid a heavy Chromium download.
 - **Theme module** — All colors are centralized in `theme.ts` for easy customization and consistency.
 - **ESM throughout** — The project uses ES modules (`"type": "module"`) for compatibility with Ink v5 which is ESM-only.
+- **Timed abort signals** — The scraper creates composite abort signals via `createTimedSignal()` that combine a user-cancellation signal with a per-operation timeout, so both `Ctrl+C` and hung network requests are covered cleanly.
+- **Stable React keys for duplicates** — `buildOccurrenceKeys(items)` in `helpers.ts` appends occurrence counters to duplicate strings (e.g. `['a','b','a']` → `['a-1','b-1','a-2']`). Use it anywhere a list may contain repeated items to satisfy React's key uniqueness requirement.
+- **Shortcut helpers** — All keyboard shortcut matching lives in `src/utils/shortcuts.ts`. Use `isCtrlShortcut(input, key, letter)` rather than inlining control-character comparisons. This handles both key metadata and raw `\u0014`-style bytes.
+- **Text layout for scrollable views** — `wrapText(text, width, initialIndent, continuationIndent)` in `src/utils/text-layout.ts` produces word-wrapped lines with hanging indentation, used by `RecipeCard` in constrained (small-viewport) mode. Prefer it over manual string splitting.
+- **RecipeCard responsive breakpoints** — `RecipeCard` enters a full-screen scrollable text mode when `width < 110` or `height < 34` (constrained mode). The wide split layout appears at `width >= 96` and the full sidebar at `width >= 124`. Keep these thresholds consistent when changing layout logic.
+- **CLI runtime dependency injection** — `src/cli-runtime.ts` accepts optional DI parameters (`AppComponent`, `renderApp`, `env`, `stdout`) so the full alt-screen/palette lifecycle can be unit-tested without a real TTY. Tests in `test/cli-runtime.test.ts` use this.
+- **AI content cap** — The AI fallback in the scraper truncates raw HTML to 120 KB before sending to OpenAI to stay within token limits and control cost.
 
 ## Common Patterns
 
@@ -162,3 +176,7 @@ The current suite focuses on pure helpers rather than Ink rendering:
 - `test/scraper.test.ts` covers JSON-LD extraction and challenge-page detection
 - `test/theme.test.ts` covers theme detection and `Ctrl+T` toggle helpers
 - `test/terminal.test.ts` covers render-height buffering, synchronized-output detection, palette detection, and env-matrix compatibility cases for common macOS and Linux terminals
+- `test/cli-runtime.test.ts` covers alt-screen entry/exit, synchronized output proxy selection, and palette reset with mock stdout
+- `test/shortcuts.test.ts` covers `isCtrlShortcut`, `isThemeToggleShortcut`, and `isDisplayQuitShortcut` helpers
+- `test/text-layout.test.ts` covers `wrapText` width enforcement and hanging indentation
+- `test/cli-pty.test.ts` is a PTY integration test that verifies alt-screen escape sequences via `script(1)`
