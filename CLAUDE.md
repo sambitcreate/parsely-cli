@@ -67,6 +67,7 @@ The browser path now uses a more browser-like Puppeteer configuration (`userAgen
 | File | Purpose |
 |------|---------|
 | `src/cli.tsx` | Entry point — parses `--help`, `--version`, optional URL arg |
+| `src/cli-runtime.ts` | CLI runtime — alt-screen, synchronized output, palette reset with DI for testing |
 | `src/app.tsx` | Root component — theme mode, layout switching, phase orchestration |
 | `src/theme.ts` | Theme registry, theme-mode detection, symbols — single source of truth for styling |
 | `src/services/scraper.ts` | All scraping logic — Puppeteer, Cheerio, OpenAI |
@@ -87,6 +88,8 @@ The browser path now uses a more browser-like Puppeteer configuration (`userAgen
 | `test/scraper.test.ts` | Schema extraction and challenge detection coverage |
 | `test/theme.test.ts` | Theme-mode detection and toggle coverage |
 | `test/terminal.test.ts` | Terminal compatibility matrix and palette/sync helper coverage |
+| `test/cli-runtime.test.ts` | CLI runtime unit tests with mock stdout and render |
+| `test/cli-pty.test.ts` | PTY integration test for alt-screen escapes via script(1) |
 
 ## Development Commands
 
