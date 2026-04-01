@@ -3,7 +3,7 @@ const SYNC_OUTPUT_END = '\u001B[?2026l';
 const OSC = '\u001B]';
 const ST = '\u001B\\';
 
-type EnvMap = Record<string, string | undefined>;
+export type EnvMap = Record<string, string | undefined>;
 
 const SYNCHRONIZED_OUTPUT_TERM_PROGRAMS = new Set([
   'ghostty',
