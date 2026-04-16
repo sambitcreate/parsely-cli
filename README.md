@@ -26,13 +26,37 @@ parsely --version
 
 ## Configuration
 
-For AI fallback (optional but recommended), set the OpenAI API key:
+For AI fallback (optional but recommended), set the OpenAI API key in your shell:
 
 ```bash
 export OPENAI_API_KEY="your_key_here"
+parsely https://example.com/recipe
 ```
 
-Without this, browser scraping still works for most recipe sites.
+Without a key, browser scraping still works for most recipe sites.
+
+### Recommended: inject keys from a secret manager
+
+Parsely never persists the API key — it reads `OPENAI_API_KEY` from the environment at startup. Prefer injecting it at invocation time from a secret manager so the key never lands on disk in a flat file:
+
+```bash
+# 1Password CLI
+OPENAI_API_KEY=$(op read "op://Personal/OpenAI/api_key") parsely <url>
+
+# pass
+OPENAI_API_KEY=$(pass show openai/api_key) parsely <url>
+
+# macOS Keychain
+OPENAI_API_KEY=$(security find-generic-password -a "$USER" -s openai_api_key -w) parsely <url>
+```
+
+### `.env.local` (discouraged)
+
+For quick local development Parsely will read `.env.local` if it exists. This file is `.gitignore`d, but it is still exposed to any process with filesystem access and to backup/sync tools (Time Machine, iCloud Drive, Dropbox). If you must use it:
+
+1. Treat the key as already-leaked — rotate it regularly at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+2. Consider installing a secret scanner like [`gitleaks`](https://github.com/gitleaks/gitleaks) or [`detect-secrets`](https://github.com/Yelp/detect-secrets) as a pre-commit hook so `.env*` files can never be staged.
+3. Delete the file when you're done with a development session.
 
 Optional terminal tuning:
 
