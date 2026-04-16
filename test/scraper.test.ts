@@ -5,6 +5,7 @@ import {
   extractRecipeFromHtml,
   findRecipeJson,
   normalizeAiRecipe,
+  parseAiRecipeResponse,
   scrapeRecipe,
 } from '../src/services/scraper.js';
 
@@ -170,4 +171,60 @@ test('scrapeRecipe rejects non-http urls before scraping starts', async () => {
   );
 
   assert.deepEqual(statuses, ['Invalid URL. Please enter a valid http or https recipe URL.']);
+});
+
+test('parseAiRecipeResponse throws a clear error on malformed JSON', () => {
+  assert.throws(
+    () => parseAiRecipeResponse('not json'),
+    /AI response was invalid JSON/,
+  );
+  assert.throws(
+    () => parseAiRecipeResponse('{"name": "unterminated'),
+    /AI response was invalid JSON/,
+  );
+});
+
+test('parseAiRecipeResponse throws on shape drift', () => {
+  // recipeIngredient must be an array of strings.
+  assert.throws(
+    () =>
+      parseAiRecipeResponse(
+        JSON.stringify({ name: 'X', recipeIngredient: 'flour, sugar, eggs' }),
+      ),
+    /shape mismatch at recipeIngredient/,
+  );
+
+  // prepTime must be a number, not a string.
+  assert.throws(
+    () => parseAiRecipeResponse(JSON.stringify({ prepTime: 'PT30M' })),
+    /shape mismatch at prepTime/,
+  );
+});
+
+test('parseAiRecipeResponse accepts valid minimal payloads', () => {
+  const parsed = parseAiRecipeResponse(
+    JSON.stringify({
+      name: 'Weeknight Curry',
+      prepTime: 15,
+      cookTime: 20,
+      totalTime: 35,
+      servings: 4,
+      recipeIngredient: ['1 onion', '2 tbsp oil'],
+      recipeInstructions: ['Saute the onion.', 'Add the spices.'],
+      nutrition: null,
+    }),
+  );
+
+  assert.equal((parsed as { name: string }).name, 'Weeknight Curry');
+});
+
+test('parseAiRecipeResponse tolerates unknown extra keys from model drift', () => {
+  const parsed = parseAiRecipeResponse(
+    JSON.stringify({
+      name: 'Cookies',
+      extraField: 'ignored',
+    }),
+  );
+
+  assert.equal((parsed as { name: string }).name, 'Cookies');
 });

@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer-core';
 import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
+import { z } from 'zod';
 import { constants as fsConstants } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { isoToMinutes, loadConfig, normalizeRecipeUrl, sanitizeTerminalText } from '../utils/helpers.js';
@@ -505,6 +506,70 @@ const AI_SYSTEM_PROMPT =
   'If information is missing, use reasonable defaults (0 for times, 4 for servings). ' +
   'Use only the provided page content. Do not invent data.';
 
+/**
+ * Shape contract for the JSON returned by the AI recipe extractor.
+ *
+ * All fields are optional because the model may omit any of them; when it
+ * does include a field, we require the correct shape so `normalizeAiRecipe`
+ * can trust its input instead of silently swallowing shape drift.
+ * Unknown keys are allowed to survive minor prompt/model changes.
+ */
+export const aiRecipeSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  prepTime: z.number().optional(),
+  cookTime: z.number().optional(),
+  totalTime: z.number().optional(),
+  servings: z.number().optional(),
+  recipeIngredient: z.array(z.string()).optional(),
+  recipeInstructions: z
+    .array(
+      z.union([
+        z.string(),
+        z.object({
+          text: z.string().optional(),
+          itemListElement: z
+            .array(z.object({ text: z.string().optional() }))
+            .optional(),
+        }),
+      ]),
+    )
+    .optional(),
+  nutrition: z
+    .object({
+      calories: z.string().nullish(),
+      fatContent: z.string().nullish(),
+      proteinContent: z.string().nullish(),
+      carbohydrateContent: z.string().nullish(),
+      fiberContent: z.string().nullish(),
+      sugarContent: z.string().nullish(),
+      sodiumContent: z.string().nullish(),
+    })
+    .nullish(),
+});
+
+/**
+ * Parse + validate the raw AI response content. Throws a clear error if the
+ * content is not valid JSON or does not match the expected recipe shape.
+ */
+export function parseAiRecipeResponse(content: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error('AI response was invalid JSON');
+  }
+
+  const result = aiRecipeSchema.safeParse(parsed);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const path = issue?.path.join('.') || '<root>';
+    throw new Error(`AI response shape mismatch at ${path}: ${issue?.message ?? 'unknown'}`);
+  }
+
+  return result.data as Record<string, unknown>;
+}
+
 async function scrapeWithAI(url: string, pageSource: string, signal?: AbortSignal): Promise<Recipe> {
   throwIfAborted(signal);
   const { openaiApiKey } = loadConfig();
@@ -550,7 +615,7 @@ async function scrapeWithAI(url: string, pageSource: string, signal?: AbortSigna
   const content = response.choices[0]?.message?.content;
   if (!content) throw new Error('AI returned empty response');
 
-  const recipe = normalizeAiRecipe(JSON.parse(content) as Record<string, unknown>);
+  const recipe = normalizeAiRecipe(parseAiRecipeResponse(content));
 
   if (!hasRecipeContent(recipe)) {
     throw new Error('AI could not extract recipe data from the page');
