@@ -4,7 +4,7 @@ This file provides context for AI assistants (Claude, Copilot, etc.) working on 
 
 ## Project Overview
 
-Parsely CLI is a terminal-based recipe scraper that extracts structured data (ingredients, instructions, cook times) from recipe URLs. It features an interactive Ink TUI with a viewport-filling app shell, responsive panels, and alternate-screen terminal behavior.
+Parsely CLI is a terminal-based recipe scraper that extracts structured data (ingredients, instructions, cook times) from recipe URLs. It uses dedicated Ink screens for the idle, scraping, display, and error phases, along with alternate-screen terminal behavior.
 
 ## Tech Stack
 
@@ -25,11 +25,11 @@ The app uses a phase-based state machine in `src/app.tsx`:
 
 ```
 idle → scraping → display
-                → error → idle (retry)
-         display → idle (new recipe)
+     ↘ error → scraping (retry submit)
+display → idle (new recipe)
 ```
 
-The state machine still drives the app, but the screen layout now changes per phase instead of swapping a single centered card.
+The state machine still drives the app, but the layout now swaps between dedicated phase screens instead of presenting a single general shell.
 
 ### Component Tree
 
@@ -52,13 +52,13 @@ The browser path now uses a more browser-like Puppeteer configuration (`userAgen
 
 ### Terminal Behavior
 
-- `src/cli.tsx` enters the terminal alternate screen before rendering Ink, restores it after exit, and explicitly resets the terminal background color on shutdown
-- `src/cli.tsx` enables synchronized output in terminals that are known to support DECSET 2026 reliably (`ghostty`, `WezTerm`, and Kitty-style `TERM` values)
+- `src/cli-runtime.ts` enters the terminal alternate screen before rendering Ink, restores it after exit, and explicitly resets the terminal background color on shutdown
+- `src/cli-runtime.ts` enables synchronized output in terminals that are known to support DECSET 2026 reliably (`ghostty`, `WezTerm`, and Kitty-style `TERM` values)
 - `useTerminalViewport()` reads live terminal width/height from Ink stdout and updates layout on resize
 - `src/utils/terminal.ts` keeps the Ink tree one row shorter than the terminal so Ink stays on its incremental-update path instead of clearing the entire screen on each render
 - `src/utils/terminal.ts` also gates advanced terminal features by environment so palette changes are enabled only for terminals we explicitly support, and are disabled inside multiplexers such as `tmux` and `screen`
 - `src/app.tsx` collapses non-essential panels on shorter terminals so the URL input remains visible and usable
-- `src/components/URLInput.tsx` strips pasted CR/LF characters, treats `Enter` as submit, and shows `Ctrl+C` / `Ctrl+T` hints directly under the field
+- `src/components/URLInput.tsx` strips pasted CR/LF characters, treats `Enter` as submit, and shows phase-appropriate hints under the field
 - `src/app.tsx` owns an `AbortController` for the active scrape so `Ctrl+C` can abort browser or AI work before exiting
 - `src/app.tsx` owns the active theme mode, auto-detects light/dark preference on startup, and lets `Ctrl+T` toggle the full app theme across all screens
 
@@ -66,7 +66,7 @@ The browser path now uses a more browser-like Puppeteer configuration (`userAgen
 
 | File | Purpose |
 |------|---------|
-| `src/cli.tsx` | Entry point — parses `--help`, `--version`, optional URL arg |
+| `src/cli.tsx` | Thin entry point — parses `--help`, `--version`, optional URL arg |
 | `src/cli-runtime.ts` | CLI runtime — alt-screen, synchronized output, palette reset with DI for testing |
 | `src/app.tsx` | Root component — theme mode, layout switching, phase orchestration |
 | `src/theme.ts` | Theme registry, theme-mode detection, symbols — single source of truth for styling |
@@ -90,6 +90,8 @@ The browser path now uses a more browser-like Puppeteer configuration (`userAgen
 | `test/terminal.test.ts` | Terminal compatibility matrix and palette/sync helper coverage |
 | `test/cli-runtime.test.ts` | CLI runtime unit tests with mock stdout and render |
 | `test/cli-pty.test.ts` | PTY integration test for alt-screen escapes via script(1) |
+| `test/shortcuts.test.ts` | Keyboard shortcut coverage for ctrl chords, display quit, and theme toggle |
+| `test/text-layout.test.ts` | Text wrapping coverage for titles and numbered instruction layout |
 
 ## Development Commands
 
@@ -113,12 +115,13 @@ npm test               # Run helper and scraper unit tests
 
 - **Ink over raw ANSI** — Declarative React components are easier to maintain than imperative terminal output. Ink uses Yoga (Flexbox) for layout.
 - **Phase-based state** — A simple state machine (`idle | scraping | display | error`) keeps the UI predictable.
-- **Alternate screen shell** — Parsely behaves like a focused terminal app, not a command that leaves the UI in shell history. The screen switch is handled in `src/cli.tsx`, outside the React tree, to avoid corrupting Ink's render cycle.
+- **Dedicated phase screens** — Idle, scraping, display, and error are intentionally different layouts rather than variants of one shared shell.
+- **Alternate screen shell** — Parsely behaves like a focused terminal app, not a command that leaves the UI in shell history. The screen switch is handled in `src/cli-runtime.ts`, outside the React tree, to avoid corrupting Ink's render cycle.
 - **Stable repaint path** — Ink v5 clears the whole terminal when rendered output fills the viewport, so Parsely deliberately leaves one row free to stay on incremental updates and reduce flicker in terminals like Ghostty.
 - **Theme at the app root** — The active palette is applied once from `App` so all screens share the same background and theme toggle behavior.
 - **Conservative terminal capability detection** — Palette updates are enabled only for terminals we explicitly recognize as safe defaults, and synchronized output is narrower still. Multiplexers and embedded terminals are treated as opt-in to avoid protocol regressions.
-- **Synchronized output** — Parsely wraps Ink's stdout with DECSET 2026 escape codes only for terminals we explicitly trust for it. `PARSELY_SYNC_OUTPUT=1` forces this on and `PARSELY_SYNC_OUTPUT=0` disables it.
-- **Display palette override** — Parsely writes OSC background-color sequences only in supported terminals or when explicitly forced with `PARSELY_DISPLAY_PALETTE=1`.
+- **Synchronized output** — Parsely wraps Ink's stdout with DECSET 2026 escape codes only for terminals we explicitly trust for it by default: Ghostty, WezTerm, and Kitty-style `TERM` values. `PARSELY_SYNC_OUTPUT=1` forces this on and `PARSELY_SYNC_OUTPUT=0` disables it.
+- **Display palette override** — Parsely writes OSC background-color sequences from the app root only in supported terminals or when explicitly forced with `PARSELY_DISPLAY_PALETTE=1`, and resets them again during runtime teardown.
 - **Callback-driven scraping** — The scraper accepts an `onStatus` callback so the TUI can show real-time progress without polling.
 - **Explicit pipeline UI** — Browser fetch, parsing, and AI fallback are surfaced as distinct stages so users can see which path produced the recipe.
 - **Defensive input handling** — URL submission is handled locally in `URLInput`, with CR/LF sanitization so paste-plus-enter works reliably in real terminals.
@@ -157,8 +160,12 @@ Run tests with:
 npm test
 ```
 
-The current suite focuses on pure helpers rather than Ink rendering:
+The current suite covers runtime and helper behavior rather than deep Ink snapshot rendering:
 - `test/helpers.test.ts` covers URL normalization and pasted newline sanitization
 - `test/scraper.test.ts` covers JSON-LD extraction and challenge-page detection
 - `test/theme.test.ts` covers theme detection and `Ctrl+T` toggle helpers
 - `test/terminal.test.ts` covers render-height buffering, synchronized-output detection, palette detection, and env-matrix compatibility cases for common macOS and Linux terminals
+- `test/cli-runtime.test.ts` covers alt-screen lifecycle, palette reset, and synchronized stdout injection
+- `test/cli-pty.test.ts` covers PTY smoke behavior for alt-screen entry/exit under `script(1)`
+- `test/shortcuts.test.ts` covers phase-relevant shortcut helpers
+- `test/text-layout.test.ts` covers title wrapping and hanging indentation for steps

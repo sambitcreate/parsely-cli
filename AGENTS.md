@@ -8,10 +8,12 @@ Parsely CLI is a full-screen terminal recipe scraper built with Ink. The app tak
 
 The runtime flow is:
 
-1. `src/cli.tsx` parses CLI args, enters the alternate screen, and mounts Ink.
-2. `src/app.tsx` runs a phase-based UI state machine: `idle -> scraping -> display` or `error`.
-3. `src/services/scraper.ts` attempts browser/schema extraction first, then falls back to OpenAI only when needed.
-4. The display phase renders a dedicated recipe layout in `src/components/RecipeCard.tsx`.
+1. `src/cli.tsx` parses CLI args/help/version and hands control to `src/cli-runtime.ts`.
+2. `src/cli-runtime.ts` owns the alternate screen, synchronized stdout proxying, Ink mounting, and terminal cleanup.
+3. `src/app.tsx` runs a phase-based UI state machine: `idle -> scraping -> display`, `idle/scraping -> error`, and retry submit from the error screen back into `scraping`.
+4. The UI swaps between dedicated phase screens instead of keeping a single general shell mounted across the whole flow.
+5. `src/services/scraper.ts` attempts browser/schema extraction first, then falls back to OpenAI only when needed.
+6. The display phase renders a dedicated recipe layout in `src/components/RecipeCard.tsx`.
 
 ## Stack
 
@@ -49,17 +51,17 @@ The runtime flow is:
 ### Error
 
 - `src/components/ErrorDisplay.tsx`
-- Retry path routes back through `URLInput`
+- Retry is its own error-phase layout: `ErrorDisplay` + retry `URLInput` + `PhaseRail` + `Footer`
+- Submitting the retry field transitions the app back into `scraping`; there is no direct `error -> idle` jump unless the user exits
 
 ## Terminal Behavior
 
 - The CLI uses the terminal alternate screen while Parsely is open.
+- `src/cli-runtime.ts` owns alternate-screen entry/exit, stdout wrapping, and shutdown cleanup. Keep that behavior out of `src/cli.tsx` and out of the React tree.
 - `src/utils/terminal.ts` deliberately leaves one row free so Ink stays on incremental rendering and does not clear the whole viewport on every update.
-- Ghostty synchronized output is enabled by default through the CLI/stdout wrapper.
-- `src/hooks/useDisplayPalette.ts` sets the terminal background color during the landing and recipe display screens.
+- Synchronized output defaults on only for Ghostty, WezTerm, and Kitty-compatible terminals unless `PARSELY_SYNC_OUTPUT` overrides it.
+- `src/hooks/useDisplayPalette.ts` applies the active app background from the root `App` tree when palette support is enabled, and runtime cleanup resets the terminal default background on exit.
 - `Ctrl+C` should abort any in-flight scrape before exit.
-
-Do not move alternate-screen control into the React tree. It belongs in `src/cli.tsx`.
 
 ## Scraping Pipeline
 
@@ -80,13 +82,16 @@ The app is intentionally browser-first. Do not make AI the default path.
 
 ## Files That Matter
 
-- `src/cli.tsx`: CLI entrypoint, alternate screen, stdout wrapping
+- `src/cli.tsx`: thin CLI entrypoint for args/help/version
+- `src/cli-runtime.ts`: terminal runtime, alt-screen lifecycle, synchronized stdout wrapping, cleanup
 - `src/app.tsx`: state machine, input flow, scrape orchestration
 - `src/services/scraper.ts`: browser extraction, schema parsing, AI fallback
 - `src/components/LandingScreen.tsx`: idle/landing view
 - `src/components/URLInput.tsx`: paste-safe single-line URL input
 - `src/components/RecipeCard.tsx`: recipe presentation
 - `src/utils/helpers.ts`: URL normalization and input sanitization
+- `src/utils/shortcuts.ts`: phase-aware keyboard shortcut helpers
+- `src/utils/text-layout.ts`: wrapping helpers for titles and instructions
 - `src/utils/terminal.ts`: render-height, synchronized output, background helpers
 - `src/theme.ts`: shared color palette and symbols
 
@@ -127,7 +132,15 @@ If the work touches React layout or terminal rendering, also run:
 npx -y react-doctor@latest . --verbose --diff
 ```
 
+The current docs and tests should stay aligned on coverage for:
+
+- CLI runtime teardown in `test/cli-runtime.test.ts`
+- PTY alt-screen smoke coverage in `test/cli-pty.test.ts`
+- Shortcut helpers in `test/shortcuts.test.ts`
+- Text layout helpers in `test/text-layout.test.ts`
+
 ## Existing Docs
 
 - `README.md` already exists and covers install, usage, and developer setup.
-- `CLAUDE.md` contains broader assistant-oriented project notes, but may lag behind the newest UI changes.
+- `README.md` should describe phase-aware shortcuts, `src/cli-runtime.ts`, and the dedicated idle/scraping/display/error screens.
+- `CLAUDE.md` contains broader assistant-oriented project notes and should stay aligned with the current runtime/test structure.

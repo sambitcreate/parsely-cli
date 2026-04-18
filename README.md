@@ -71,8 +71,8 @@ export PARSELY_THEME=light     # start in light theme
 
 ## Terminal UI
 
-- Uses an Ink-based app shell instead of printing one-off output
-- Switches into the terminal alternate screen from the CLI entrypoint and restores the previous screen on exit
+- Uses dedicated full-screen Ink views for the idle, scraping, display, and error phases instead of a general shell layout
+- `src/cli-runtime.ts` switches into the terminal alternate screen before Ink mounts and restores the previous screen on exit
 - Restores the terminal's default background color on exit after using the app palette
 - Reserves one terminal row so Ink can update incrementally instead of clearing the whole screen on every spinner tick
 - Adapts the layout to the current terminal size for wide and narrow viewports
@@ -81,20 +81,20 @@ export PARSELY_THEME=light     # start in light theme
 - Shows a live scraping pipeline so browser parsing and AI fallback are visible as separate stages
 - Detects light/dark preference on startup and applies a matching app-wide theme
 - Lets you toggle the full app theme at runtime with `Ctrl+T`
-- Enables synchronized output in Ghostty and WezTerm by default so frame updates paint atomically
-- Applies the terminal background palette by default in Ghostty, Apple Terminal, iTerm2, WezTerm, Warp, Kitty, Alacritty, and foot
+- Enables synchronized output in Ghostty, WezTerm, and Kitty-compatible terminals by default so frame updates paint atomically
+- Applies the terminal background palette from the app root when the current terminal is in the supported compatibility set
 - Avoids advanced palette/sync behavior in `tmux`, `screen`, VS Code's integrated terminal, JetBrains terminals, the Linux console, and `TERM=dumb` unless you explicitly override it
 
 ## Keyboard Shortcuts
 
-| Key      | Action            |
-| -------- | ----------------- |
-| `Enter`  | Submit URL        |
-| `Ctrl+T` | Toggle theme      |
-| `n`      | Scrape new recipe |
-| `q`      | Quit              |
-| `Esc`    | Quit from result view |
-| `Ctrl+C` | Exit              |
+| Key | When active | Action |
+| --- | ----------- | ------ |
+| `Enter` | Idle, error | Submit the current URL |
+| `Ctrl+T` | Idle, scraping, display, error | Toggle theme |
+| `n` | Display | Start a new scrape from the idle screen |
+| `q` | Display | Quit |
+| `Esc` | Display | Quit |
+| `Ctrl+C` | Any phase | Abort any active scrape and exit |
 
 ## Troubleshooting
 
@@ -117,14 +117,15 @@ MIT — see [LICENSE](LICENSE).
 ```
 parsely-cli/
 ├── src/
-│   ├── cli.tsx              # Entry point
-│   ├── app.tsx              # Root component — app shell + state machine
+│   ├── cli.tsx              # Thin CLI entrypoint: args/help/version
+│   ├── cli-runtime.ts       # Terminal runtime: alt-screen, stdout wrapping, cleanup
+│   ├── app.tsx              # Root component — phase screens + state machine
 │   ├── theme.ts             # Color palette
 │   ├── components/          # UI components
 │   ├── hooks/               # Terminal viewport and screen management
 │   ├── services/scraper.ts  # Puppeteer + OpenAI
 │   └── utils/               # Input, URL, and terminal helpers
-├── test/                    # Unit tests for helpers and scraper parsing
+├── test/                    # Runtime, PTY, shortcuts, text layout, helpers, and scraper tests
 ├── package.json
 ├── tsconfig.json
 └── CLAUDE.md                # AI assistant context
@@ -145,7 +146,8 @@ npm test
 1. **Browser Scraping** — Headless Chrome loads the page and extracts Schema.org JSON-LD recipe data
 2. **Parsing Stage** — Parsely scans and normalizes recipe schema before deciding whether the page is usable
 3. **AI Fallback** — OpenAI `gpt-4o-mini` extracts data only when browser parsing cannot recover a recipe
-4. **Display** — The result is plated into a responsive terminal recipe deck with pipeline, prep, and method panels
+4. **Phase Transitions** — `src/app.tsx` moves `idle -> scraping -> display`, or `idle/scraping -> error -> scraping` when the retry form submits another URL
+5. **Display** — The result is plated into a responsive terminal recipe deck with pipeline, prep, and method panels
 
 ### UI Structure
 
@@ -154,9 +156,10 @@ npm test
 - `Banner` — status-aware header with current host and app state
 - `Panel` — shared bordered container used across the error shell
 - `PhaseRail` — pipeline view for browser, parsing, and AI stages
-- `URLInput` — normalizes pasted newlines and exposes shortcut hints under the field
+- `URLInput` — normalizes pasted newlines and exposes phase-appropriate shortcut hints under the field
 - `RecipeCard` — split recipe layout with summary, ingredients, timing, and method
 - `Footer` — persistent status line and key hints on non-landing screens
+- `cli-runtime.ts` — owns alternate-screen entry/exit, synchronized stdout proxying, and terminal cleanup outside the React tree
 - `useTerminalViewport` — terminal sizing and resize tracking
 - `utils/terminal.ts` — terminal compatibility detection, synchronized-output, palette control, and render-height helpers
 
@@ -166,7 +169,7 @@ npm test
 npm test
 ```
 
-The test suite covers input normalization, schema extraction, theme-mode helpers, and terminal compatibility detection for common macOS and Linux terminals.
+The test suite covers runtime cleanup in `test/cli-runtime.test.ts`, PTY alt-screen behavior in `test/cli-pty.test.ts`, shortcut handling in `test/shortcuts.test.ts`, text wrapping in `test/text-layout.test.ts`, plus input normalization, schema extraction, theme-mode helpers, and terminal compatibility detection.
 
 ### Build & Publish
 
