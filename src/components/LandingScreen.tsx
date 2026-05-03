@@ -120,9 +120,12 @@ const compactLandingArt: LandingArt = {
 export function LandingScreen({ width, height, onSubmit, onToggleTheme }: LandingScreenProps) {
   const art = width >= primaryLandingArt.width + 8 ? primaryLandingArt : compactLandingArt;
   const artKeys = buildOccurrenceKeys(art.lines);
-  const inputWidth = width >= 120 ? 54 : width >= 84 ? 46 : Math.max(28, width - 16);
-  const controlsWidth = inputWidth + 8;
-  const contentWidth = Math.min(width - 6, Math.max(controlsWidth, art.width));
+  const availableWidth = Math.max(12, width - 4);
+  const showGoButton = availableWidth >= 36;
+  const inputTargetWidth = width >= 120 ? 54 : width >= 84 ? 46 : width - (showGoButton ? 16 : 6);
+  const inputWidth = Math.max(12, Math.min(inputTargetWidth, showGoButton ? availableWidth - 8 : availableWidth));
+  const controlsWidth = inputWidth + (showGoButton ? 8 : 0);
+  const contentWidth = Math.max(12, Math.min(availableWidth, Math.max(controlsWidth, art.width)));
 
   return (
     <Box flexDirection="column" width="100%" height="100%" paddingX={2} paddingY={1}>
@@ -139,7 +142,13 @@ export function LandingScreen({ width, height, onSubmit, onToggleTheme }: Landin
           </Box>
 
           <Box width={controlsWidth} justifyContent="center">
-            <URLInput onSubmit={onSubmit} onToggleTheme={onToggleTheme} mode="landing" width={inputWidth} />
+            <URLInput
+              onSubmit={onSubmit}
+              onToggleTheme={onToggleTheme}
+              mode="landing"
+              width={inputWidth}
+              showSubmitHint={showGoButton}
+            />
           </Box>
         </Box>
       </Box>

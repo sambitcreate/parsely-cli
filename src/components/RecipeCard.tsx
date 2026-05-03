@@ -25,7 +25,9 @@ function extractInstructions(recipe: Recipe): string[] {
       } else if (typeof step === 'object' && step !== null) {
         if ('text' in step && step.text) {
           steps.push(step.text);
-        } else if ('itemListElement' in step && Array.isArray(step.itemListElement)) {
+        }
+
+        if ('itemListElement' in step && Array.isArray(step.itemListElement)) {
           for (const sub of step.itemListElement) {
             if (sub.text) steps.push(sub.text);
           }
@@ -230,7 +232,7 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
   const sourceLabel = recipe.source === 'browser' ? 'Page schema' : 'AI rescue';
   const constrained = width < 110 || height < 34;
 
-  const compactContentWidth = Math.max(24, width - 4);
+  const compactContentWidth = Math.max(12, width - 4);
   const compactHeaderLines = buildCompactHeaderLines(recipe, sourceHost, compactContentWidth);
   const compactBodyLines = buildCompactBodyLines(
     sourceHost,

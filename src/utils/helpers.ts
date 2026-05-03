@@ -13,16 +13,16 @@ export function isoToMinutes(duration: string | undefined): number {
   if (!duration || typeof duration !== 'string') return -1;
 
   const match = duration.match(
-    /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/,
+    /^P(?:(\d+(?:\.\d+)?)D)?T?(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/,
   );
   if (!match) return -1;
 
-  const days = parseInt(match[1] || '0', 10);
-  const hours = parseInt(match[2] || '0', 10);
-  const minutes = parseInt(match[3] || '0', 10);
-  const seconds = parseInt(match[4] || '0', 10);
+  const days = Number.parseFloat(match[1] || '0');
+  const hours = Number.parseFloat(match[2] || '0');
+  const minutes = Number.parseFloat(match[3] || '0');
+  const seconds = Number.parseFloat(match[4] || '0');
 
-  return days * 1440 + hours * 60 + minutes + Math.ceil(seconds / 60);
+  return Math.ceil(days * 1440 + hours * 60 + minutes + seconds / 60);
 }
 
 /**

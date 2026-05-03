@@ -9,9 +9,16 @@ interface URLInputProps {
   onToggleTheme?: () => void;
   mode?: 'default' | 'landing';
   width?: number;
+  showSubmitHint?: boolean;
 }
 
-export function URLInput({ onSubmit, onToggleTheme, mode = 'default', width }: URLInputProps) {
+export function URLInput({
+  onSubmit,
+  onToggleTheme,
+  mode = 'default',
+  width,
+  showSubmitHint = true,
+}: URLInputProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
   const ignoreNextChange = useRef(false);
@@ -111,7 +118,7 @@ export function URLInput({ onSubmit, onToggleTheme, mode = 'default', width }: U
           </Text>
         </Box>
 
-        {landing && (
+        {landing && showSubmitHint && (
           <Box marginLeft={1}>
             <Text backgroundColor={theme.colors.brand} color={theme.colors.recipePaper} bold>
               {landingButtonLabel}
