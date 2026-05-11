@@ -65,6 +65,22 @@ const AI_SOURCE_LIMIT = 120_000;
  * Handles direct Recipe type, @graph arrays, and nested lists.
  */
 export function findRecipeJson(scripts: string[]): Record<string, unknown> | null {
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+  const isRecipeType = (value: unknown): boolean => {
+    const types = Array.isArray(value) ? value : [value];
+
+    return types.some((type) => {
+      if (typeof type !== 'string') {
+        return false;
+      }
+
+      const normalized = type.trim().toLowerCase();
+      return normalized === 'recipe' || normalized.endsWith('/recipe') || normalized.endsWith('#recipe');
+    });
+  };
+
   for (const raw of scripts) {
     let data: unknown;
     try {
@@ -73,28 +89,23 @@ export function findRecipeJson(scripts: string[]): Record<string, unknown> | nul
       continue;
     }
 
-    const candidates: Record<string, unknown>[] = Array.isArray(data)
-      ? (data as Record<string, unknown>[])
-      : [data as Record<string, unknown>];
+    const candidates: unknown[] = Array.isArray(data) ? [...data] : [data];
 
     // Use index-based loop because we may push into candidates as we go
     for (let i = 0; i < candidates.length; i++) {
       const obj = candidates[i];
+      if (!isRecord(obj)) {
+        continue;
+      }
 
       // Expand @graph
       if (obj['@graph']) {
         const graph = obj['@graph'];
-        const items = Array.isArray(graph)
-          ? (graph as Record<string, unknown>[])
-          : [graph as Record<string, unknown>];
+        const items = Array.isArray(graph) ? graph : [graph];
         candidates.push(...items);
       }
 
-      const recipeType = obj['@type'];
-      if (
-        recipeType === 'Recipe' ||
-        (Array.isArray(recipeType) && recipeType.includes('Recipe'))
-      ) {
+      if (isRecipeType(obj['@type'])) {
         return obj;
       }
     }
