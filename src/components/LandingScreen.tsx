@@ -117,12 +117,32 @@ const compactLandingArt: LandingArt = {
   width: 'PARSLEY'.length,
 };
 
+export function getLandingLayout(width: number, artWidth: number) {
+  const availableWidth = Math.max(12, width - 6);
+  const preferredInputWidth = width >= 120 ? 54 : width >= 84 ? 46 : Math.max(18, width - 16);
+  const showActionBadge = availableWidth >= 38;
+  const actionWidth = showActionBadge ? 8 : 0;
+  const inputWidth = Math.max(12, Math.min(preferredInputWidth, availableWidth - actionWidth));
+  const controlsWidth = inputWidth + actionWidth;
+  const contentWidth = Math.min(availableWidth, Math.max(controlsWidth, Math.min(artWidth, availableWidth)));
+
+  return {
+    inputWidth,
+    controlsWidth,
+    contentWidth,
+    showActionBadge,
+  };
+}
+
 export function LandingScreen({ width, height, onSubmit, onToggleTheme }: LandingScreenProps) {
   const art = width >= primaryLandingArt.width + 8 ? primaryLandingArt : compactLandingArt;
   const artKeys = buildOccurrenceKeys(art.lines);
-  const inputWidth = width >= 120 ? 54 : width >= 84 ? 46 : Math.max(28, width - 16);
-  const controlsWidth = inputWidth + 8;
-  const contentWidth = Math.min(width - 6, Math.max(controlsWidth, art.width));
+  const {
+    inputWidth,
+    controlsWidth,
+    contentWidth,
+    showActionBadge,
+  } = getLandingLayout(width, art.width);
 
   return (
     <Box flexDirection="column" width="100%" height="100%" paddingX={2} paddingY={1}>
@@ -139,7 +159,13 @@ export function LandingScreen({ width, height, onSubmit, onToggleTheme }: Landin
           </Box>
 
           <Box width={controlsWidth} justifyContent="center">
-            <URLInput onSubmit={onSubmit} onToggleTheme={onToggleTheme} mode="landing" width={inputWidth} />
+            <URLInput
+              onSubmit={onSubmit}
+              onToggleTheme={onToggleTheme}
+              mode="landing"
+              width={inputWidth}
+              showActionBadge={showActionBadge}
+            />
           </Box>
         </Box>
       </Box>
