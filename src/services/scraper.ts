@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { constants as fsConstants } from 'node:fs';
 import { access } from 'node:fs/promises';
+import { delimiter, join } from 'node:path';
 import { isoToMinutes, loadConfig, normalizeRecipeUrl, sanitizeTerminalText } from '../utils/helpers.js';
 
 /* ------------------------------------------------------------------ */
@@ -84,30 +85,37 @@ export function findRecipeJson(scripts: string[]): Record<string, unknown> | nul
   for (const raw of scripts) {
     let data: unknown;
     try {
-      data = JSON.parse(raw);
+      data = JSON.parse(cleanJsonLd(raw));
     } catch {
       continue;
     }
 
-    const candidates: unknown[] = Array.isArray(data) ? [...data] : [data];
+    const candidates: unknown[] = [data];
+    const seen = new WeakSet<object>();
 
-    // Use index-based loop because we may push into candidates as we go
+    // Use an index-based loop because nested JSON-LD nodes are pushed as we go.
     for (let i = 0; i < candidates.length; i++) {
       const obj = candidates[i];
-      if (!isRecord(obj)) {
+      if (Array.isArray(obj)) {
+        candidates.push(...obj);
         continue;
       }
 
-      // Expand @graph
-      if (obj['@graph']) {
-        const graph = obj['@graph'];
-        const items = Array.isArray(graph) ? graph : [graph];
-        candidates.push(...items);
+      if (!isRecord(obj) || seen.has(obj)) {
+        continue;
       }
+
+      seen.add(obj);
 
       if (isRecipeType(obj['@type'])) {
         return obj;
       }
+
+      if (obj['@graph']) {
+        candidates.push(obj['@graph']);
+      }
+
+      candidates.push(...Object.values(obj));
     }
   }
 
@@ -201,10 +209,29 @@ function parseTimeField(value: unknown): number {
     return Math.max(0, Math.round(value));
   }
   if (typeof value === 'string') {
-    const mins = isoToMinutes(value.trim());
-    return mins >= 0 ? mins : 0;
+    const trimmed = value.trim();
+    const mins = isoToMinutes(trimmed);
+    if (mins >= 0) return mins;
+
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return Math.max(0, Math.round(numeric));
+
+    const days = parseDurationPart(trimmed, /(\d+(?:\.\d+)?)\s*(?:d|day|days)\b/iu);
+    const hours = parseDurationPart(trimmed, /(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/iu);
+    const minutes = parseDurationPart(trimmed, /(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)\b/iu);
+    const seconds = parseDurationPart(trimmed, /(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b/iu);
+    const total = days * 1440 + hours * 60 + minutes + seconds / 60;
+    return total > 0 ? Math.ceil(total) : 0;
   }
   return 0;
+}
+
+function parseDurationPart(value: string, pattern: RegExp): number {
+  const match = value.match(pattern);
+  if (!match) return 0;
+
+  const parsed = Number.parseFloat(match[1] ?? '0');
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function parseServings(value: unknown): number {
@@ -221,12 +248,18 @@ function parseServings(value: unknown): number {
 }
 
 function normalizeNutrition(value: unknown): NutritionInfo | null {
-  if (!value || typeof value !== 'object') return null;
+  if (!isRecord(value)) return null;
   const raw = value as Record<string, unknown>;
 
   const pick = (key: string): string | null => {
     const v = raw[key];
     if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+    if (isRecord(v)) {
+      const nested = v['value'];
+      if (typeof nested === 'string' && nested.trim()) return nested.trim();
+      if (typeof nested === 'number' && Number.isFinite(nested)) return String(nested);
+    }
     return null;
   };
 
@@ -248,11 +281,10 @@ function normalizeRecipePayload(
   recipe: Record<string, unknown>,
   source: Recipe['source'],
 ): Recipe {
-  const recipeIngredient = Array.isArray(recipe.recipeIngredient)
-    ? recipe.recipeIngredient
-        .map((item) => normalizeText(item))
-        .filter((item): item is string => Boolean(item))
-    : undefined;
+  const ingredientSource = recipe.recipeIngredient ?? recipe.ingredients;
+  const recipeIngredient = (Array.isArray(ingredientSource) ? ingredientSource : [ingredientSource])
+    .map((item) => normalizeText(item))
+    .filter((item): item is string => Boolean(item));
 
   const prepTime = parseTimeField(recipe.prepTime);
   const cookTime = parseTimeField(recipe.cookTime);
@@ -266,7 +298,7 @@ function normalizeRecipePayload(
     cookTime,
     totalTime,
     servings: parseServings(recipe.recipeYield ?? recipe.yield ?? recipe.servings),
-    recipeIngredient,
+    recipeIngredient: recipeIngredient.length > 0 ? recipeIngredient : undefined,
     recipeInstructions: normalizeInstructions(recipe.recipeInstructions),
     nutrition: normalizeNutrition(recipe.nutrition),
     source,
@@ -293,11 +325,23 @@ function hasRecipeContent(recipe: Recipe): boolean {
   );
 }
 
+function hasUsableBrowserRecipe(recipe: Recipe): boolean {
+  return Boolean(
+    (recipe.name || recipe.description) &&
+      (recipe.recipeIngredient?.length || recipe.recipeInstructions?.length),
+  );
+}
+
 export function extractRecipeFromHtml(html: string): Recipe | null {
   const $ = cheerio.load(html);
   const scripts: string[] = [];
 
-  $('script[type="application/ld+json"]').each((_index, element) => {
+  $('script').each((_index, element) => {
+    const type = ($(element).attr('type') ?? '').toLowerCase();
+    if (!type.includes('ld+json')) {
+      return;
+    }
+
     const text = $(element).text();
     if (text) scripts.push(text);
   });
@@ -319,6 +363,64 @@ const CHROME_PATHS = [
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
 ];
 
+const CHROME_PATH_BINARIES = [
+  'google-chrome-stable',
+  'google-chrome',
+  'chromium-browser',
+  'chromium',
+  'chrome',
+  'chrome.exe',
+  'msedge',
+  'msedge.exe',
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function cleanJsonLd(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^<!--/u, '')
+    .replace(/-->$/u, '')
+    .trim();
+}
+
+function schemaTypeNames(value: unknown): string[] {
+  if (typeof value === 'string') {
+    const normalized = value.trim().split('/').pop()?.toLowerCase();
+    return normalized ? [normalized] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => schemaTypeNames(item));
+  }
+
+  return [];
+}
+
+function isRecipeType(value: unknown): boolean {
+  return schemaTypeNames(value).includes('recipe');
+}
+
+async function findExecutableOnPath(names: string[]): Promise<string | null> {
+  const pathEntries = process.env['PATH']?.split(delimiter).filter(Boolean) ?? [];
+
+  for (const directory of pathEntries) {
+    for (const name of names) {
+      const candidate = join(directory, name);
+      try {
+        await access(candidate, fsConstants.X_OK);
+        return candidate;
+      } catch {
+        // Try the next candidate.
+      }
+    }
+  }
+
+  return null;
+}
+
 async function findChrome(): Promise<string | null> {
   const candidates = [
     process.env['PUPPETEER_EXECUTABLE_PATH'],
@@ -335,7 +437,7 @@ async function findChrome(): Promise<string | null> {
     }
   }
 
-  return null;
+  return findExecutableOnPath(CHROME_PATH_BINARIES);
 }
 
 function createAbortError(): Error {
@@ -660,7 +762,7 @@ export async function scrapeRecipe(
   onStatus({ phase: 'browser', message: 'Launching browser\u2026' });
   const browserResult = await scrapeWithBrowser(normalizedUrl, onStatus, signal);
 
-  if (browserResult.recipe) {
+  if (browserResult.recipe && hasUsableBrowserRecipe(browserResult.recipe)) {
     onStatus({ phase: 'done', message: 'Recipe found!', recipe: browserResult.recipe });
     return browserResult.recipe;
   }
@@ -678,6 +780,15 @@ export async function scrapeRecipe(
   } catch (error) {
     if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
       throw createAbortError();
+    }
+
+    if (browserResult.recipe && hasRecipeContent(browserResult.recipe)) {
+      onStatus({
+        phase: 'done',
+        message: 'Partial recipe found. AI fallback was unavailable.',
+        recipe: browserResult.recipe,
+      });
+      return browserResult.recipe;
     }
 
     const message = error instanceof Error ? error.message : 'Unknown error occurred';

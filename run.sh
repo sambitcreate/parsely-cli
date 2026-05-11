@@ -13,11 +13,18 @@ fi
 # Install dependencies if node_modules is missing
 if [ ! -d "node_modules" ]; then
   echo "Installing dependencies..."
-  npm install
+  if command -v pnpm &>/dev/null; then
+    pnpm install
+  elif command -v npm &>/dev/null; then
+    npm install
+  else
+    echo "Error: pnpm or npm is required to install dependencies"
+    exit 1
+  fi
 fi
 
 # Ensure color support for the TUI
 export COLORTERM=truecolor
 
 # Launch the Ink-based TUI
-npx tsx src/cli.tsx "$@"
+./node_modules/.bin/tsx src/cli.tsx "$@"

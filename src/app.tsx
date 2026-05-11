@@ -12,7 +12,7 @@ import { useTerminalViewport } from './hooks/useTerminalViewport.js';
 import { detectPreferredThemeMode, resolveInitialThemeMode, setActiveTheme, theme, toggleThemeMode, type ThemeMode } from './theme.js';
 import { useDisplayPalette } from './hooks/useDisplayPalette.js';
 import { sanitizeTerminalText } from './utils/helpers.js';
-import { isDisplayQuitShortcut, isThemeToggleShortcut } from './utils/shortcuts.js';
+import { isCtrlShortcut, isDisplayQuitShortcut, isThemeToggleShortcut } from './utils/shortcuts.js';
 import { getRenderableHeight } from './utils/terminal.js';
 import { LandingScreen } from './components/LandingScreen.js';
 import { LoadingScreen } from './components/LoadingScreen.js';
@@ -130,7 +130,7 @@ export function App({ initialUrl }: AppProps) {
   }, [applyThemeMode, themeMode]);
 
   useInput((input, key) => {
-    if (key.ctrl && input === 'c') {
+    if (isCtrlShortcut(input, key, 'c')) {
       cancelActiveScrape();
       exit();
       return;

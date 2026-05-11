@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildOccurrenceKeys,
   isValidUrl,
+  isoToMinutes,
   normalizeRecipeUrl,
   sanitizeSingleLineInput,
   sanitizeTerminalText,
@@ -40,6 +41,11 @@ test('normalizeRecipeUrl rejects non-http schemes', () => {
 
 test('normalizeRecipeUrl rejects empty input', () => {
   assert.equal(normalizeRecipeUrl('   '), null);
+});
+
+test('isoToMinutes handles fractional ISO duration fields', () => {
+  assert.equal(isoToMinutes('PT1.5H'), 90);
+  assert.equal(isoToMinutes('PT90.5S'), 2);
 });
 
 test('sanitizeTerminalText strips ansi and control sequences', () => {

@@ -65,6 +65,21 @@ test('findRecipeJson recognizes schema.org URL recipe types', () => {
   assert.equal(recipe?.name, 'Schema URL Soup');
 });
 
+test('findRecipeJson tolerates non-object JSON-LD and nested recipe nodes', () => {
+  const recipe = findRecipeJson([
+    JSON.stringify('not schema'),
+    JSON.stringify({
+      '@context': 'https://schema.org',
+      mainEntity: {
+        '@type': 'https://schema.org/Recipe',
+        name: 'Nested Noodles',
+      },
+    }),
+  ]);
+
+  assert.equal(recipe?.name, 'Nested Noodles');
+});
+
 test('extractRecipeFromHtml returns a browser recipe when JSON-LD exists', () => {
   const recipe = extractRecipeFromHtml(`
     <html>
@@ -84,6 +99,30 @@ test('extractRecipeFromHtml returns a browser recipe when JSON-LD exists', () =>
   assert.equal(recipe?.name, 'Roast Potatoes');
   assert.equal(recipe?.source, 'browser');
   assert.deepEqual(recipe?.recipeIngredient, ['potatoes', 'salt']);
+});
+
+test('extractRecipeFromHtml accepts charset-qualified and commented JSON-LD blocks', () => {
+  const recipe = extractRecipeFromHtml(`
+    <html>
+      <head>
+        <script type="application/ld+json; charset=utf-8">
+          <!--
+          {
+            "@context": "https://schema.org",
+            "@type": "Recipe",
+            "name": "Commented Cake",
+            "recipeIngredient": "1 cup flour",
+            "recipeInstructions": "Bake until done."
+          }
+          -->
+        </script>
+      </head>
+    </html>
+  `);
+
+  assert.equal(recipe?.name, 'Commented Cake');
+  assert.deepEqual(recipe?.recipeIngredient, ['1 cup flour']);
+  assert.deepEqual(recipe?.recipeInstructions, ['Bake until done.']);
 });
 
 test('extractRecipeFromHtml normalizes encoded schema text', () => {
@@ -170,6 +209,31 @@ test('normalizeAiRecipe keeps only supported recipe fields', () => {
     recipeInstructions: [{ itemListElement: [{ text: 'Saute the onion.' }, { text: 'Add the spices.' }] }],
     nutrition: null,
     source: 'ai',
+  });
+});
+
+test('normalizeAiRecipe handles human-readable times and numeric nutrition', () => {
+  const recipe = normalizeAiRecipe({
+    name: 'Snack Plate',
+    prepTime: '1 hour 15 minutes',
+    cookTime: '90 seconds',
+    nutrition: {
+      calories: 250,
+      proteinContent: { value: 12 },
+    },
+  });
+
+  assert.equal(recipe.prepTime, 75);
+  assert.equal(recipe.cookTime, 2);
+  assert.equal(recipe.totalTime, 77);
+  assert.deepEqual(recipe.nutrition, {
+    calories: '250',
+    fatContent: null,
+    proteinContent: '12',
+    carbohydrateContent: null,
+    fiberContent: null,
+    sugarContent: null,
+    sodiumContent: null,
   });
 });
 
