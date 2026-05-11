@@ -49,42 +49,75 @@ function buildRule(width: number, maxWidth: number): string {
   return theme.symbols.line.repeat(length);
 }
 
-function splitTitle(title: string, maxChars: number, maxLines = 3): string[] {
+export function splitTitle(title: string, maxChars: number, maxLines = 3): string[] {
   const words = title.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) {
     return ['Untitled recipe'];
   }
 
-  const lines: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (current && next.length > maxChars) {
-      lines.push(current);
-      current = word;
-      continue;
-    }
-
-    current = next;
+  const lines: string[] = wrapText(words.join(' '), maxChars);
+  if (lines.length <= maxLines) {
+    return lines;
   }
 
-  if (current) {
-    lines.push(current);
+  const visible = lines.slice(0, maxLines);
+  const lastIndex = visible.length - 1;
+  const ellipsis = theme.symbols.ellipsis;
+  const lastLine = visible[lastIndex] ?? '';
+  visible[lastIndex] = lastLine.length >= maxChars
+    ? `${lastLine.slice(0, Math.max(1, maxChars - ellipsis.length))}${ellipsis}`
+    : `${lastLine}${ellipsis}`;
+
+  return visible;
+}
+
+function estimateWrappedLines(items: string[], width: number, initialIndent = '', continuationIndent = initialIndent): number {
+  return items.reduce(
+    (total, item) => total + wrapText(item, width, initialIndent, continuationIndent).length + 1,
+    0,
+  );
+}
+
+export function shouldUseCompactRecipeLayout({
+  width,
+  height,
+  recipe,
+  ingredients,
+  instructions,
+}: {
+  width: number;
+  height: number;
+  recipe: Recipe;
+  ingredients: string[];
+  instructions: string[];
+}): boolean {
+  if (width < 110 || height < 34) {
+    return true;
   }
 
-  while (lines.length > maxLines) {
-    const last = lines.pop();
-    const prev = lines.pop();
+  const wide = width >= 124;
+  const splitContent = width >= 96;
+  const compact = width < 82;
+  const titleLineCount = width >= 132 ? 2 : 3;
+  const titleChars = Math.max(16, Math.ceil((recipe.name ?? 'Untitled recipe').length / titleLineCount) + 4);
+  const titleLines = splitTitle(recipe.name ?? 'Untitled recipe', titleChars, titleLineCount);
+  const mainWidth = wide ? Math.floor(width * 0.68) : width - (compact ? 2 : 4);
+  const ingredientWidth = splitContent ? Math.floor(mainWidth * 0.38) : mainWidth;
+  const instructionWidth = splitContent ? Math.floor(mainWidth * 0.62) - 4 : mainWidth - 4;
+  const descriptionLines = recipe.description ? wrapText(recipe.description, Math.max(24, mainWidth)).length + 1 : 0;
+  const nutritionLines = recipe.nutrition
+    ? Object.values(recipe.nutrition).filter(Boolean).length * 2 + 3
+    : 0;
+  const sidebarLines = wide ? Math.max(0, 11 + nutritionLines) : 11 + nutritionLines;
+  const contentLines = Math.max(
+    estimateWrappedLines(ingredients, Math.max(12, ingredientWidth), '□ ', '  '),
+    estimateWrappedLines(instructions, Math.max(12, instructionWidth), '00 ', '   '),
+    wide ? sidebarLines : 0,
+  );
+  const stackedSidebarLines = wide ? 0 : sidebarLines;
+  const estimatedLines = titleLines.length + descriptionLines + contentLines + stackedSidebarLines + 12;
 
-    if (!last || !prev) {
-      break;
-    }
-
-    lines.push(`${prev} ${last}`);
-  }
-
-  return lines;
+  return estimatedLines > height;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -202,7 +235,7 @@ function buildCompactBodyLines(
   return lines;
 }
 
-function buildCompactFooter(width: number, scrollOffset: number, maxScroll: number): string {
+export function buildCompactFooter(width: number, scrollOffset: number, maxScroll: number): string {
   const location = maxScroll > 0 ? `${scrollOffset + 1}/${maxScroll + 1}` : '1/1';
 
   if (width >= 96) {
@@ -211,6 +244,10 @@ function buildCompactFooter(width: number, scrollOffset: number, maxScroll: numb
 
   if (width >= 58) {
     return `${location}  ${theme.symbols.dot}  ↑↓ scroll  ${theme.symbols.dot}  ctrl+t theme  ${theme.symbols.dot}  q/esc quit`;
+  }
+
+  if (maxScroll > 0) {
+    return `${location}  ${theme.symbols.dot}  ↑↓`;
   }
 
   return `ctrl+t theme  ${theme.symbols.dot}  q/esc quit`;
@@ -228,7 +265,13 @@ export function RecipeCard({ recipe, width, height, sourceUrl }: RecipeCardProps
   const instructionKeys = buildOccurrenceKeys(instructions);
   const sourceHost = getUrlHost(sourceUrl) || 'original page';
   const sourceLabel = recipe.source === 'browser' ? 'Page schema' : 'AI rescue';
-  const constrained = width < 110 || height < 34;
+  const constrained = shouldUseCompactRecipeLayout({
+    width,
+    height,
+    recipe,
+    ingredients,
+    instructions,
+  });
 
   const compactContentWidth = Math.max(24, width - 4);
   const compactHeaderLines = buildCompactHeaderLines(recipe, sourceHost, compactContentWidth);
