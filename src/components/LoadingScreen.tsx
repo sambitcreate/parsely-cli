@@ -8,7 +8,7 @@ interface LoadingScreenProps {
   status?: ScrapeStatus | null;
 }
 
-function getLoadingCopy(status?: ScrapeStatus | null): string {
+export function getLoadingCopy(status?: ScrapeStatus | null): string {
   switch (status?.phase) {
     case 'parsing':
       return 'Preparing recipe...';
@@ -19,6 +19,10 @@ function getLoadingCopy(status?: ScrapeStatus | null): string {
     default:
       return 'Loading recipe...';
   }
+}
+
+export function getLoadingDetail(status?: ScrapeStatus | null): string {
+  return status?.message?.trim() ?? '';
 }
 
 export function LoadingScreen({ status }: LoadingScreenProps) {
@@ -33,6 +37,13 @@ export function LoadingScreen({ status }: LoadingScreenProps) {
             {getLoadingCopy(status)}
           </Text>
         </Box>
+        {getLoadingDetail(status) && (
+          <Box marginTop={1}>
+            <Text color={theme.colors.recipeMuted}>
+              {getLoadingDetail(status)}
+            </Text>
+          </Box>
+        )}
       </Box>
     </Box>
   );
