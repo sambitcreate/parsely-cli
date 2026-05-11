@@ -44,6 +44,27 @@ test('findRecipeJson ignores invalid JSON blocks', () => {
   assert.equal(recipe?.name, 'Valid Recipe');
 });
 
+test('findRecipeJson skips non-object JSON-LD nodes', () => {
+  const recipe = findRecipeJson([
+    'null',
+    JSON.stringify(['breadcrumb', null, { '@type': 'Recipe', name: 'Object Recipe' }]),
+  ]);
+
+  assert.equal(recipe?.name, 'Object Recipe');
+});
+
+test('findRecipeJson recognizes schema.org URL recipe types', () => {
+  const recipe = findRecipeJson([
+    JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': ['https://schema.org/Recipe', 'CreativeWork'],
+      name: 'Schema URL Soup',
+    }),
+  ]);
+
+  assert.equal(recipe?.name, 'Schema URL Soup');
+});
+
 test('extractRecipeFromHtml returns a browser recipe when JSON-LD exists', () => {
   const recipe = extractRecipeFromHtml(`
     <html>
