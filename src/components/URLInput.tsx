@@ -9,9 +9,16 @@ interface URLInputProps {
   onToggleTheme?: () => void;
   mode?: 'default' | 'landing';
   width?: number;
+  showActionBadge?: boolean;
 }
 
-export function URLInput({ onSubmit, onToggleTheme, mode = 'default', width }: URLInputProps) {
+export function URLInput({
+  onSubmit,
+  onToggleTheme,
+  mode = 'default',
+  width,
+  showActionBadge = true,
+}: URLInputProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
   const ignoreNextChange = useRef(false);
@@ -39,7 +46,7 @@ export function URLInput({ onSubmit, onToggleTheme, mode = 'default', width }: U
     onSubmit(url);
   };
 
-  const handleChange = (nextValue: string) => {
+  const updateSanitizedUrlValue = (nextValue: string) => {
     if (ignoreNextChange.current) {
       ignoreNextChange.current = false;
       return;
@@ -104,14 +111,14 @@ export function URLInput({ onSubmit, onToggleTheme, mode = 'default', width }: U
             <TextInput
               value={value}
               focus={true}
-              onChange={handleChange}
+              onChange={updateSanitizedUrlValue}
               onSubmit={handleSubmit}
               placeholder={landing ? 'Paste recipe link here' : 'Enter recipe URL...'}
             />
           </Text>
         </Box>
 
-        {landing && (
+        {landing && showActionBadge && (
           <Box marginLeft={1}>
             <Text backgroundColor={theme.colors.brand} color={theme.colors.recipePaper} bold>
               {landingButtonLabel}
