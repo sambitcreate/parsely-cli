@@ -27,8 +27,8 @@ export interface RecipeView {
   instructions: RecipeInstruction[];
   nutrition: ApiNutritionInfo | null;
   tags: string[];
-  isFavorite: boolean;
-  isPinned: boolean;
+  isFavorite: boolean | null;
+  isPinned: boolean | null;
   folderId: string | null;
   createdAt: string | null;
   recipeOverride: ApiRecipeOverride | null;

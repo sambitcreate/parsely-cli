@@ -3,11 +3,17 @@ import assert from 'node:assert/strict';
 import {
   assertCanAttachToken,
   createEnvSession,
+  decodeJwtTokenClaims,
   isSafeTokenTarget,
   normalizeApiBaseUrl,
   resolveRuntimeConfig,
   sessionIsExpired,
 } from '../src/services/auth-session.js';
+
+function fakeJwt(payload: Record<string, unknown>): string {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.signature`;
+}
 
 test('normalizeApiBaseUrl defaults to production and strips trailing slash', () => {
   assert.equal(normalizeApiBaseUrl(undefined), 'https://parsely.us');
@@ -37,31 +43,69 @@ test('resolveRuntimeConfig reads CLI auth environment', () => {
       PARSELY_AUTH_TOKEN: ' token ',
       PARSELY_TOKEN_STORE: '/tmp/parsely-session.json',
       PARSELY_ALLOW_UNTRUSTED_API_BASE_URL: '1',
+      PARSELY_AUTH_TOKEN_ISSUER: 'https://convex.example',
     }),
     {
       apiBaseUrl: 'http://localhost:3000',
       envAuthToken: 'token',
       tokenStorePath: '/tmp/parsely-session.json',
       allowUnsafeTokenTarget: true,
+      expectedTokenIssuer: 'https://convex.example',
     },
   );
 });
 
 test('createEnvSession returns a runtime session when PARSELY_AUTH_TOKEN is set', () => {
+  const token = fakeJwt({ exp: 100, iss: 'https://convex.example' });
   const session = createEnvSession({
     apiBaseUrl: 'https://parsely.us',
-    envAuthToken: 'token',
+    envAuthToken: token,
     allowUnsafeTokenTarget: false,
+    expectedTokenIssuer: 'https://convex.example/',
   }, 1234);
 
-  assert.equal(session?.accessToken, 'token');
+  assert.equal(session?.accessToken, token);
   assert.equal(session?.apiBaseUrl, 'https://parsely.us');
   assert.equal(session?.createdAt, 1234);
+  assert.equal(session?.expiresAt, 100_000);
+  assert.equal(session?.issuer, 'https://convex.example');
 });
 
-test('sessionIsExpired treats sessions without expiry as valid', () => {
-  assert.equal(sessionIsExpired(null), false);
-  assert.equal(sessionIsExpired({}), false);
-  assert.equal(sessionIsExpired({ expiresAt: 10 }, 11), true);
-  assert.equal(sessionIsExpired({ expiresAt: 10 }, 9), false);
+test('decodeJwtTokenClaims reads JWT payload fields', () => {
+  const token = fakeJwt({ exp: 123, iss: 'https://convex.example', sub: 'user-1' });
+  assert.deepEqual(decodeJwtTokenClaims(token), {
+    exp: 123,
+    iss: 'https://convex.example',
+    sub: 'user-1',
+  });
+  assert.equal(decodeJwtTokenClaims('not-a-jwt'), null);
+});
+
+test('createEnvSession rejects malformed, expired, and wrong-issuer tokens', () => {
+  const config = {
+    apiBaseUrl: 'https://parsely.us',
+    allowUnsafeTokenTarget: false,
+    expectedTokenIssuer: 'https://convex.example',
+  };
+
+  assert.throws(
+    () => createEnvSession({ ...config, envAuthToken: 'not-a-jwt' }, 1),
+    /JWT with an exp claim/,
+  );
+  assert.throws(
+    () => createEnvSession({ ...config, envAuthToken: fakeJwt({ exp: 1, iss: 'https://convex.example' }) }, 1_000),
+    /expired/,
+  );
+  assert.throws(
+    () => createEnvSession({ ...config, envAuthToken: fakeJwt({ exp: 100, iss: 'https://other.example' }) }, 1_000),
+    /issuer/,
+  );
+});
+
+test('sessionIsExpired refuses missing and near-expiry sessions', () => {
+  assert.equal(sessionIsExpired(null), true);
+  assert.equal(sessionIsExpired({}), true);
+  assert.equal(sessionIsExpired({ expiresAt: 10_000 }, 11_000), true);
+  assert.equal(sessionIsExpired({ expiresAt: 10_000 }, 9_000), true);
+  assert.equal(sessionIsExpired({ expiresAt: 60_000 }, 9_000), false);
 });

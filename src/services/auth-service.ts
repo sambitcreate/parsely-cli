@@ -1,5 +1,6 @@
 import {
   createEnvSession,
+  refreshStoredSession,
   resolveRuntimeConfig,
   sessionIsExpired,
   type AuthSession,
@@ -29,11 +30,26 @@ export class AuthService {
     }
 
     const stored = await this.store.read();
-    if (!stored || sessionIsExpired(stored)) {
+    if (!stored) {
       return null;
     }
 
-    return stored;
+    try {
+      const refreshed = refreshStoredSession(stored, this.config);
+      if (sessionIsExpired(refreshed)) {
+        await this.store.clear();
+        return null;
+      }
+
+      if (refreshed.expiresAt !== stored.expiresAt || refreshed.issuer !== stored.issuer) {
+        await this.store.write(refreshed);
+      }
+
+      return refreshed;
+    } catch {
+      await this.store.clear();
+      return null;
+    }
   }
 
   async loginWithEnvironmentToken(now = Date.now()): Promise<AuthSession> {

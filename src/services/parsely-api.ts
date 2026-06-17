@@ -19,7 +19,6 @@ export interface ParselyApiClientOptions {
 
 export interface RecipesListParams {
   folder?: string;
-  folderId?: string;
   search?: string;
   limit?: number;
   cursor?: string;
@@ -212,7 +211,6 @@ export class ParselyApiClient {
 function encodeRecipesListParams(params: RecipesListParams): URLSearchParams {
   const query = new URLSearchParams();
   if (params.folder) query.set('folder', params.folder);
-  if (params.folderId) query.set('folderId', params.folderId);
   if (params.search) query.set('search', params.search);
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   if (params.cursor) query.set('cursor', params.cursor);

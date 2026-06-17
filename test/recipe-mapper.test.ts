@@ -71,8 +71,8 @@ test('mapApiRecipeToView handles parse-result recipe data', () => {
   assert.equal(recipe.title, 'Tomato Soup');
   assert.deepEqual(recipe.ingredients.map((ingredient) => ingredient.text), ['tomatoes', 'stock']);
   assert.deepEqual(recipe.instructions.map((instruction) => instruction.text), ['Simmer', 'Blend']);
-  assert.equal(recipe.isFavorite, false);
-  assert.equal(recipe.isPinned, false);
+  assert.equal(recipe.isFavorite, null);
+  assert.equal(recipe.isPinned, null);
 });
 
 test('mapApiRecipeToView requires a recipe id', () => {
