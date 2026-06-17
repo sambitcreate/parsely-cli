@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
-import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, runCli } from '../src/cli-runtime.js';
+import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, runCli, runRecipeLibraryCli } from '../src/cli-runtime.js';
 
 interface MockStdout extends NodeJS.WriteStream {
   writes: string[];
@@ -175,4 +175,27 @@ test('runCli still resets the palette when render throws before Ink can mount', 
     EXIT_ALT_SCREEN,
     '<reset>',
   ]);
+});
+
+test('runRecipeLibraryCli renders the library app through the shared runtime', async () => {
+  const stdout = createMockStdout(true);
+  function LibraryStub() {
+    return React.createElement('text');
+  }
+  let renderTree: React.ReactElement | undefined;
+
+  await runRecipeLibraryCli({
+    stdout,
+    AppComponent: LibraryStub,
+    shouldUseDisplayPalette: () => false,
+    shouldUseSynchronizedOutput: () => false,
+    renderApp: createRenderStub({
+      onRender(tree) {
+        renderTree = tree;
+      },
+    }),
+  });
+
+  assert.deepEqual(stdout.writes, [ENTER_ALT_SCREEN, EXIT_ALT_SCREEN]);
+  assert.equal(renderTree?.type, LibraryStub);
 });

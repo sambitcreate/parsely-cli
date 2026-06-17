@@ -1,6 +1,7 @@
 import React, { type ComponentType, type ReactElement } from 'react';
 import { render } from 'ink';
 import { App, type AppProps } from './app.js';
+import { RecipeLibraryApp, type RecipeLibraryAppProps } from './components/RecipeLibraryApp.js';
 import {
   createSynchronizedWriteProxy,
   resetDefaultTerminalBackground,
@@ -31,18 +32,22 @@ export interface CliRuntimeDependencies {
   stdout?: NodeJS.WriteStream;
 }
 
+export interface RecipeLibraryRuntimeDependencies extends Omit<CliRuntimeDependencies, 'AppComponent'> {
+  AppComponent?: ComponentType<RecipeLibraryAppProps>;
+}
+
 export const ENTER_ALT_SCREEN = '\u001B[?1049h\u001B[2J\u001B[H';
 export const EXIT_ALT_SCREEN = '\u001B[?1049l';
 
-export async function runCli(
-  initialUrl?: string,
-  dependencies: CliRuntimeDependencies = {},
+async function runInkApp<Props extends object>(
+  AppComponent: ComponentType<Props>,
+  props: Props,
+  dependencies: Omit<CliRuntimeDependencies, 'AppComponent'> = {},
 ): Promise<void> {
   const stdout = dependencies.stdout ?? process.stdout;
   const env = dependencies.env ?? process.env;
   const useAltScreen = stdout.isTTY === true;
   const renderApp = dependencies.renderApp ?? render;
-  const AppComponent = dependencies.AppComponent ?? App;
   const shouldUseSyncOutput = dependencies.shouldUseSynchronizedOutput ?? shouldUseSynchronizedOutput;
   const shouldUsePalette = dependencies.shouldUseDisplayPalette ?? shouldUseDisplayPalette;
   const wrapStdout = dependencies.createSynchronizedWriteProxy ?? createSynchronizedWriteProxy;
@@ -56,7 +61,7 @@ export async function runCli(
   }
 
   try {
-    const instance = renderApp(React.createElement(AppComponent, { initialUrl }), {
+    const instance = renderApp(React.createElement(AppComponent, props), {
       exitOnCtrlC: false,
       stdout: inkStdout,
     });
@@ -82,4 +87,21 @@ export async function runCli(
       // Ignore cleanup errors (EPIPE, ERR_STREAM_DESTROYED, etc.)
     }
   }
+}
+
+export async function runCli(
+  initialUrl?: string,
+  dependencies: CliRuntimeDependencies = {},
+): Promise<void> {
+  const AppComponent = dependencies.AppComponent ?? App;
+  const { AppComponent: _appComponent, ...runtimeDependencies } = dependencies;
+  await runInkApp(AppComponent, { initialUrl }, runtimeDependencies);
+}
+
+export async function runRecipeLibraryCli(
+  dependencies: RecipeLibraryRuntimeDependencies = {},
+): Promise<void> {
+  const AppComponent = dependencies.AppComponent ?? RecipeLibraryApp;
+  const { AppComponent: _appComponent, ...runtimeDependencies } = dependencies;
+  await runInkApp(AppComponent, {}, runtimeDependencies);
 }
