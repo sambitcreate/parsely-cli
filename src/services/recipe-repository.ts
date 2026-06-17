@@ -13,7 +13,9 @@ export interface RecipeRepository {
   ): Promise<RecipeView>;
   removeRecipe(id: string): Promise<void>;
   toggleFavorite(id: string): Promise<boolean>;
+  setFavorite(id: string, isFavorite: boolean): Promise<boolean>;
   togglePin(id: string): Promise<boolean>;
+  setPin(id: string, isPinned: boolean): Promise<boolean>;
   moveRecipe(id: string, folderName: string): Promise<string>;
   removeFromFolder(id: string, folderName: string): Promise<void>;
   listFolders(): Promise<Folder[]>;
@@ -60,8 +62,18 @@ export class ParselyRecipeRepository implements RecipeRepository {
     return result.isFavorite;
   }
 
+  async setFavorite(id: string, isFavorite: boolean): Promise<boolean> {
+    const result = await this.api.setFavorite(id, isFavorite);
+    return result.isFavorite;
+  }
+
   async togglePin(id: string): Promise<boolean> {
     const result = await this.api.togglePin(id);
+    return result.isPinned;
+  }
+
+  async setPin(id: string, isPinned: boolean): Promise<boolean> {
+    const result = await this.api.setPin(id, isPinned);
     return result.isPinned;
   }
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
+import TextInput from 'ink-text-input';
 import { useTerminalViewport } from '../hooks/useTerminalViewport.js';
 import { useDisplayPalette } from '../hooks/useDisplayPalette.js';
 import { detectPreferredThemeMode, resolveInitialThemeMode, setActiveTheme, theme, toggleThemeMode, type ThemeMode } from '../theme.js';
@@ -13,15 +14,38 @@ import {
   buildLibraryFolders,
   buildLibraryFooter,
   clampIndex,
+  folderListCapacity,
   formatRecipeFlags,
   formatRecipeMeta,
+  recipeListCapacity,
   recipeHost,
   type LibraryMode,
   visibleWindow,
 } from '../utils/library-layout.js';
-import { sanitizeTerminalText } from '../utils/helpers.js';
+import { normalizeRecipeUrl, sanitizeSingleLineInput, sanitizeTerminalText } from '../utils/helpers.js';
 
 type LibraryPhase = 'booting' | 'auth' | 'loading' | 'ready' | 'error';
+type TextPromptKind = 'import' | 'move' | 'create-folder' | 'rename-folder';
+type ConfirmPromptKind = 'delete-recipe' | 'remove-from-folder' | 'delete-folder';
+const RECIPE_PAGE_LIMIT = 100;
+
+interface TextPromptState {
+  type: 'text';
+  kind: TextPromptKind;
+  title: string;
+  label: string;
+  value: string;
+  error: string;
+}
+
+interface ConfirmPromptState {
+  type: 'confirm';
+  kind: ConfirmPromptKind;
+  title: string;
+  message: string;
+}
+
+type PromptState = TextPromptState | ConfirmPromptState;
 
 export interface RecipeLibraryAppProps {
   repository?: RecipeRepository;
@@ -60,11 +84,17 @@ export function RecipeLibraryApp({
   const [folders, setFolders] = useState<Folder[]>([]);
   const [folderIndex, setFolderIndex] = useState(0);
   const [recipes, setRecipes] = useState<RecipeView[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMoreRecipes, setHasMoreRecipes] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mode, setMode] = useState<LibraryMode>('list');
   const [detailScroll, setDetailScroll] = useState(0);
   const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [busyMessage, setBusyMessage] = useState('');
+  const [prompt, setPrompt] = useState<PromptState | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [repositoryRefreshKey, setRepositoryRefreshKey] = useState(0);
   const hasManualThemeOverride = useRef(false);
   const loadSequence = useRef(0);
 
@@ -77,7 +107,9 @@ export function RecipeLibraryApp({
   const bodyHeight = Math.max(8, renderHeight - 5);
   const listWidth = wide ? Math.min(46, Math.max(34, Math.floor(width * 0.36))) : width - 2;
   const detailWidth = wide ? Math.max(30, width - listWidth - 6) : Math.max(20, width - 4);
-  const listCapacity = Math.max(3, bodyHeight - 6);
+  const folderCapacity = folderListCapacity(bodyHeight);
+  const visibleFolders = visibleWindow(foldersForDisplay, folderIndex, folderCapacity);
+  const listCapacity = recipeListCapacity(bodyHeight, visibleFolders.items.length);
   const detailCapacity = Math.max(4, bodyHeight - 6);
   const selectedRecipe = recipes[clampIndex(selectedIndex, recipes.length)] ?? null;
   const detailLines = selectedRecipe ? buildDetailLines(selectedRecipe, detailWidth - 4) : [];
@@ -140,7 +172,7 @@ export function RecipeLibraryApp({
     return () => {
       cancelled = true;
     };
-  }, [createRepository, injectedRepository]);
+  }, [createRepository, injectedRepository, repositoryRefreshKey]);
 
   useEffect(() => {
     if (!repository) {
@@ -153,7 +185,7 @@ export function RecipeLibraryApp({
 
     void Promise.all([
       repository.listFolders(),
-      repository.listRecipes({ folder: currentFolderName, limit: 100 }),
+      repository.listRecipes({ folder: currentFolderName, limit: RECIPE_PAGE_LIMIT }),
     ]).then(([nextFolders, page]) => {
       if (sequence !== loadSequence.current) {
         return;
@@ -161,6 +193,8 @@ export function RecipeLibraryApp({
 
       setFolders(nextFolders);
       setRecipes(page.recipes);
+      setNextCursor(page.nextCursor);
+      setHasMoreRecipes(page.hasMore);
       setSelectedIndex((current) => clampIndex(current, page.recipes.length));
       setDetailScroll(0);
       setPhase('ready');
@@ -189,6 +223,258 @@ export function RecipeLibraryApp({
     setMode('list');
   }, [foldersForDisplay.length]);
 
+  const refreshLibrary = useCallback(() => {
+    if (injectedRepository) {
+      setReloadKey((current) => current + 1);
+      return;
+    }
+
+    setRepository(null);
+    setRepositoryRefreshKey((current) => current + 1);
+  }, [injectedRepository]);
+
+  const loadMoreRecipes = useCallback(async () => {
+    if (!repository || !hasMoreRecipes || !nextCursor || busyMessage) {
+      return;
+    }
+
+    setBusyMessage('Loading more recipes...');
+    setError('');
+
+    try {
+      const page = await repository.listRecipes({
+        folder: currentFolderName,
+        limit: RECIPE_PAGE_LIMIT,
+        cursor: nextCursor,
+      });
+      setRecipes((current) => [...current, ...page.recipes]);
+      setNextCursor(page.nextCursor);
+      setHasMoreRecipes(page.hasMore);
+      setStatusMessage(page.hasMore ? 'Loaded more recipes.' : 'Loaded all recipes.');
+    } catch (caught) {
+      setError(caught instanceof Error ? sanitizeTerminalText(caught.message) : 'Could not load more recipes');
+    } finally {
+      setBusyMessage('');
+    }
+  }, [busyMessage, currentFolderName, hasMoreRecipes, nextCursor, repository]);
+
+  const patchSelectedRecipe = useCallback((id: string, patch: Partial<RecipeView>) => {
+    setRecipes((current) => current.map((recipe) => (
+      recipe.id === id ? { ...recipe, ...patch } : recipe
+    )));
+  }, []);
+
+  const runLibraryMutation = useCallback(async (
+    busyCopy: string,
+    successCopy: string,
+    operation: () => Promise<void>,
+    refreshAfter = true,
+  ) => {
+    if (!repository) {
+      return;
+    }
+
+    setBusyMessage(busyCopy);
+    setStatusMessage('');
+    setError('');
+
+    try {
+      await operation();
+      setStatusMessage(successCopy);
+      if (refreshAfter) {
+        refreshLibrary();
+      }
+    } catch (caught) {
+      setStatusMessage('');
+      setError(caught instanceof Error ? sanitizeTerminalText(caught.message) : 'Action failed');
+    } finally {
+      setBusyMessage('');
+    }
+  }, [refreshLibrary, repository]);
+
+  const openTextPrompt = useCallback((kind: TextPromptKind) => {
+    if (kind === 'import') {
+      setPrompt({
+        type: 'text',
+        kind,
+        title: 'Import Recipe',
+        label: 'URL',
+        value: '',
+        error: '',
+      });
+      return;
+    }
+
+    if (kind === 'create-folder') {
+      setPrompt({
+        type: 'text',
+        kind,
+        title: 'Create Folder',
+        label: 'Name',
+        value: '',
+        error: '',
+      });
+      return;
+    }
+
+    if (kind === 'move') {
+      setPrompt({
+        type: 'text',
+        kind,
+        title: 'Move Recipe',
+        label: 'Folder',
+        value: currentFolderName === 'All Recipes' ? '' : currentFolderName,
+        error: '',
+      });
+      return;
+    }
+
+    if (!currentFolder || currentFolder.virtual) {
+      setStatusMessage('Choose a custom folder before renaming.');
+      return;
+    }
+
+    setPrompt({
+      type: 'text',
+      kind,
+      title: 'Rename Folder',
+      label: 'Name',
+      value: currentFolder.name,
+      error: '',
+    });
+  }, [currentFolder, currentFolderName]);
+
+  const closePrompt = useCallback(() => {
+    setPrompt(null);
+  }, []);
+
+  const updatePromptValue = useCallback((value: string) => {
+    setPrompt((current) => current?.type === 'text'
+      ? { ...current, value: sanitizeSingleLineInput(value), error: '' }
+      : current);
+  }, []);
+
+  const submitTextPrompt = useCallback((value: string) => {
+    if (!prompt || prompt.type !== 'text' || !repository) {
+      return;
+    }
+
+    const trimmed = sanitizeSingleLineInput(value).trim();
+    if (!trimmed) {
+      setPrompt({ ...prompt, error: `${prompt.label} is required.` });
+      return;
+    }
+
+    if (prompt.kind === 'import') {
+      const url = normalizeRecipeUrl(trimmed);
+      if (!url) {
+        setPrompt({ ...prompt, error: 'Enter a valid public recipe URL.' });
+        return;
+      }
+
+      closePrompt();
+      void runLibraryMutation(
+        'Importing recipe...',
+        'Recipe imported.',
+        async () => {
+          await repository.importUrl(url);
+        },
+      );
+      return;
+    }
+
+    if (prompt.kind === 'move') {
+      if (!selectedRecipe) {
+        closePrompt();
+        return;
+      }
+
+      const recipeId = selectedRecipe.id;
+      closePrompt();
+      void runLibraryMutation(
+        'Moving recipe...',
+        `Moved to ${trimmed}.`,
+        async () => {
+          await repository.moveRecipe(recipeId, trimmed);
+        },
+      );
+      return;
+    }
+
+    if (prompt.kind === 'create-folder') {
+      closePrompt();
+      void runLibraryMutation(
+        'Creating folder...',
+        `Created ${trimmed}.`,
+        async () => {
+          await repository.createFolder(trimmed);
+        },
+      );
+      return;
+    }
+
+    if (!currentFolder || currentFolder.virtual) {
+      closePrompt();
+      return;
+    }
+
+    const folderId = currentFolder.id;
+    closePrompt();
+    void runLibraryMutation(
+      'Renaming folder...',
+      `Renamed folder to ${trimmed}.`,
+      async () => {
+        await repository.renameFolder(folderId, trimmed);
+      },
+    );
+  }, [closePrompt, currentFolder, prompt, repository, runLibraryMutation, selectedRecipe]);
+
+  const confirmPrompt = useCallback(() => {
+    if (!prompt || prompt.type !== 'confirm' || !repository) {
+      return;
+    }
+
+    if (prompt.kind === 'delete-recipe' && selectedRecipe) {
+      const recipeId = selectedRecipe.id;
+      closePrompt();
+      void runLibraryMutation(
+        'Deleting recipe...',
+        'Recipe removed from your cookbook.',
+        async () => {
+          await repository.removeRecipe(recipeId);
+          setRecipes((current) => current.filter((recipe) => recipe.id !== recipeId));
+        },
+      );
+      return;
+    }
+
+    if (prompt.kind === 'remove-from-folder' && selectedRecipe) {
+      const recipeId = selectedRecipe.id;
+      closePrompt();
+      void runLibraryMutation(
+        'Removing from folder...',
+        'Recipe removed from this folder.',
+        async () => {
+          await repository.removeFromFolder(recipeId, currentFolderName);
+        },
+      );
+      return;
+    }
+
+    if (prompt.kind === 'delete-folder' && currentFolder && !currentFolder.virtual) {
+      const folderId = currentFolder.id;
+      closePrompt();
+      void runLibraryMutation(
+        'Deleting folder...',
+        `Deleted ${currentFolder.name}.`,
+        async () => {
+          await repository.deleteFolder(folderId);
+          setFolderIndex(0);
+        },
+      );
+    }
+  }, [closePrompt, currentFolder, currentFolderName, prompt, repository, runLibraryMutation, selectedRecipe]);
+
   useInput((input, key) => {
     if (isCtrlShortcut(input, key, 'c')) {
       exit();
@@ -197,6 +483,29 @@ export function RecipeLibraryApp({
 
     if (isThemeToggleShortcut(input, key)) {
       handleToggleTheme();
+      return;
+    }
+
+    if (prompt?.type === 'text') {
+      if (key.escape) {
+        closePrompt();
+      }
+      return;
+    }
+
+    if (prompt?.type === 'confirm') {
+      if (input.toLowerCase() === 'y' || key.return) {
+        confirmPrompt();
+        return;
+      }
+
+      if (input.toLowerCase() === 'n' || key.escape) {
+        closePrompt();
+      }
+      return;
+    }
+
+    if (busyMessage) {
       return;
     }
 
@@ -209,7 +518,7 @@ export function RecipeLibraryApp({
 
     if (phase === 'error') {
       if (input.toLowerCase() === 'r') {
-        setReloadKey((current) => current + 1);
+        refreshLibrary();
         return;
       }
 
@@ -251,7 +560,102 @@ export function RecipeLibraryApp({
     }
 
     if (input.toLowerCase() === 'r') {
-      setReloadKey((current) => current + 1);
+      refreshLibrary();
+      return;
+    }
+
+    if (input === '+' && hasMoreRecipes) {
+      void loadMoreRecipes();
+      return;
+    }
+
+    if (input.toLowerCase() === 'i') {
+      openTextPrompt('import');
+      return;
+    }
+
+    if (input.toLowerCase() === 'c') {
+      openTextPrompt('create-folder');
+      return;
+    }
+
+    if (input.toLowerCase() === 'e') {
+      openTextPrompt('rename-folder');
+      return;
+    }
+
+    if (input === 'D') {
+      if (!currentFolder || currentFolder.virtual) {
+        setStatusMessage('Choose a custom folder before deleting it.');
+        return;
+      }
+
+      setPrompt({
+        type: 'confirm',
+        kind: 'delete-folder',
+        title: 'Delete Folder',
+        message: `Delete "${currentFolder.name}"? Recipes will move back to All Recipes.`,
+      });
+      return;
+    }
+
+    if (selectedRecipe && input.toLowerCase() === 'f') {
+      const recipeId = selectedRecipe.id;
+      const nextFavorite = !(selectedRecipe.isFavorite ?? false);
+      void runLibraryMutation(
+        nextFavorite ? 'Saving favorite...' : 'Removing favorite...',
+        nextFavorite ? 'Marked as favorite.' : 'Removed from favorites.',
+        async () => {
+          const isFavorite = await repository!.setFavorite(recipeId, nextFavorite);
+          patchSelectedRecipe(recipeId, { isFavorite });
+        },
+        false,
+      );
+      return;
+    }
+
+    if (selectedRecipe && input.toLowerCase() === 'p') {
+      const recipeId = selectedRecipe.id;
+      const nextPin = !(selectedRecipe.isPinned ?? false);
+      void runLibraryMutation(
+        nextPin ? 'Pinning recipe...' : 'Unpinning recipe...',
+        nextPin ? 'Pinned recipe.' : 'Unpinned recipe.',
+        async () => {
+          const isPinned = await repository!.setPin(recipeId, nextPin);
+          patchSelectedRecipe(recipeId, { isPinned });
+        },
+        false,
+      );
+      return;
+    }
+
+    if (selectedRecipe && input.toLowerCase() === 'm') {
+      openTextPrompt('move');
+      return;
+    }
+
+    if (selectedRecipe && input.toLowerCase() === 'u') {
+      if (currentFolderName === 'All Recipes') {
+        setStatusMessage('Choose Saved or a custom folder before removing from a folder.');
+        return;
+      }
+
+      setPrompt({
+        type: 'confirm',
+        kind: 'remove-from-folder',
+        title: 'Remove From Folder',
+        message: `Remove "${selectedRecipe.title}" from ${currentFolderName}?`,
+      });
+      return;
+    }
+
+    if (selectedRecipe && input.toLowerCase() === 'd') {
+      setPrompt({
+        type: 'confirm',
+        kind: 'delete-recipe',
+        title: 'Delete Recipe',
+        message: `Remove "${selectedRecipe.title}" from your cookbook?`,
+      });
       return;
     }
 
@@ -279,6 +683,11 @@ export function RecipeLibraryApp({
       if (movingDetail) {
         setDetailScroll((current) => Math.min(maxDetailScroll, current + 1));
       } else {
+        if (selectedIndex >= recipes.length - 1 && hasMoreRecipes) {
+          void loadMoreRecipes();
+          return;
+        }
+
         setSelectedIndex((current) => clampIndex(current + 1, recipes.length));
       }
       return;
@@ -300,8 +709,23 @@ export function RecipeLibraryApp({
         Parsely Library
       </Text>
       <Text color={theme.colors.recipeMuted}>
-        {currentFolderName}  |  {recipes.length} recipes
+        {currentFolderName}  |  {recipes.length}{hasMoreRecipes ? '+' : ''} recipes loaded
       </Text>
+      {busyMessage && (
+        <Text color={theme.colors.secondary}>
+          {busyMessage}
+        </Text>
+      )}
+      {!busyMessage && statusMessage && (
+        <Text color={theme.colors.success}>
+          {statusMessage}
+        </Text>
+      )}
+      {phase === 'ready' && error && (
+        <Text color={theme.colors.error}>
+          {error}
+        </Text>
+      )}
     </Box>
   );
 
@@ -343,15 +767,28 @@ export function RecipeLibraryApp({
 
   const renderFolders = () => (
     <Box flexDirection="column" marginBottom={1}>
-      {foldersForDisplay.map((folder, index) => (
-        <Text
-          key={folder.id}
-          color={index === folderIndex ? theme.colors.recipeText : theme.colors.recipeMuted}
-          bold={index === folderIndex}
-        >
-          {folderLabel(folder, index, index === folderIndex)}
+      {visibleFolders.start > 0 && (
+        <Text color={theme.colors.recipeSubtle}>
+          ... {visibleFolders.start} folders above
         </Text>
-      ))}
+      )}
+      {visibleFolders.items.map((folder, offset) => {
+        const index = visibleFolders.start + offset;
+        return (
+          <Text
+            key={folder.id}
+            color={index === folderIndex ? theme.colors.recipeText : theme.colors.recipeMuted}
+            bold={index === folderIndex}
+          >
+            {folderLabel(folder, index, index === folderIndex)}
+          </Text>
+        );
+      })}
+      {visibleFolders.end < foldersForDisplay.length && (
+        <Text color={theme.colors.recipeSubtle}>
+          ... {foldersForDisplay.length - visibleFolders.end} more folders
+        </Text>
+      )}
     </Box>
   );
 
@@ -391,6 +828,11 @@ export function RecipeLibraryApp({
           +{recipes.length - visibleRecipes.end} more
         </Text>
       )}
+      {recipes.length <= visibleRecipes.end && hasMoreRecipes && (
+        <Text color={theme.colors.recipeSubtle}>
+          More recipes available. Press down or + to load.
+        </Text>
+      )}
     </Box>
   );
 
@@ -425,6 +867,52 @@ export function RecipeLibraryApp({
     </Box>
   );
 
+  const renderPrompt = () => {
+    if (!prompt) {
+      return null;
+    }
+
+    return (
+      <Box flexDirection="column" borderStyle="round" borderColor={theme.colors.secondary} paddingX={1} marginTop={1}>
+        <Text color={theme.colors.secondary} bold>
+          {prompt.title}
+        </Text>
+        {prompt.type === 'confirm' ? (
+          <>
+            <Text color={theme.colors.recipeMuted} wrap="wrap">
+              {prompt.message}
+            </Text>
+            <Text color={theme.colors.recipeText}>
+              y confirm  |  n cancel
+            </Text>
+          </>
+        ) : (
+          <>
+            <Box>
+              <Text color={theme.colors.recipeText} bold>
+                {prompt.label}: 
+              </Text>
+              <TextInput
+                value={prompt.value}
+                focus={true}
+                onChange={updatePromptValue}
+                onSubmit={submitTextPrompt}
+              />
+            </Box>
+            {prompt.error && (
+              <Text color={theme.colors.error}>
+                {prompt.error}
+              </Text>
+            )}
+            <Text color={theme.colors.recipeSubtle}>
+              enter submit  |  esc cancel
+            </Text>
+          </>
+        )}
+      </Box>
+    );
+  };
+
   return (
     <Box flexDirection="column" width="100%" height={renderHeight} paddingX={1}>
       {renderHeader()}
@@ -436,12 +924,15 @@ export function RecipeLibraryApp({
         {phase === 'ready' && renderReady()}
       </Box>
 
+      {renderPrompt()}
+
       <Box marginTop={1}>
         <Text color={theme.colors.recipeMuted}>
           {buildLibraryFooter({
             mode,
             width,
             hasRecipes: recipes.length > 0,
+            hasMoreRecipes,
             detailScroll,
             maxDetailScroll,
           })}

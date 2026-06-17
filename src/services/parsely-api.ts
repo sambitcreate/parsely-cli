@@ -104,9 +104,23 @@ export class ParselyApiClient {
     });
   }
 
+  async setFavorite(id: string, isFavorite: boolean): Promise<ApiSuccessResponse & { isFavorite: boolean }> {
+    return this.request(`/api/recipes/${encodeURIComponent(id)}/favorite`, {
+      method: 'POST',
+      body: { isFavorite },
+    });
+  }
+
   async togglePin(id: string): Promise<ApiSuccessResponse & { isPinned: boolean }> {
     return this.request(`/api/recipes/${encodeURIComponent(id)}/pin`, {
       method: 'POST',
+    });
+  }
+
+  async setPin(id: string, isPinned: boolean): Promise<ApiSuccessResponse & { isPinned: boolean }> {
+    return this.request(`/api/recipes/${encodeURIComponent(id)}/pin`, {
+      method: 'POST',
+      body: { isPinned },
     });
   }
 

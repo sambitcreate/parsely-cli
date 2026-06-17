@@ -15,6 +15,8 @@ export interface DetailLine {
   kind: 'heading' | 'muted' | 'body' | 'accent' | 'empty';
 }
 
+const RECIPE_LIST_ROW_HEIGHT = 4;
+
 const VIRTUAL_FOLDERS: Folder[] = [
   { id: 'all', name: 'All Recipes', virtual: true },
   { id: 'saved', name: 'Saved', virtual: true },
@@ -50,6 +52,16 @@ export function visibleWindow<T>(items: T[], selectedIndex: number, capacity: nu
     end,
     items: items.slice(start, end),
   };
+}
+
+export function folderListCapacity(availableRows: number): number {
+  return Math.max(2, Math.min(6, Math.floor(Math.max(8, availableRows) / 4)));
+}
+
+export function recipeListCapacity(availableRows: number, visibleFolderRows: number): number {
+  const nonRecipeRows = 4 + visibleFolderRows;
+  const recipeRows = Math.max(1, availableRows - nonRecipeRows);
+  return Math.max(1, Math.floor(recipeRows / RECIPE_LIST_ROW_HEIGHT));
 }
 
 export function formatRecipeTime(recipe: RecipeView): string {
@@ -131,28 +143,32 @@ export function buildLibraryFooter({
   mode,
   width,
   hasRecipes,
+  hasMoreRecipes = false,
   detailScroll,
   maxDetailScroll,
 }: {
   mode: LibraryMode;
   width: number;
   hasRecipes: boolean;
+  hasMoreRecipes?: boolean;
   detailScroll: number;
   maxDetailScroll: number;
 }): string {
   if (!hasRecipes) {
-    return 'r refresh  |  [ ] folders  |  q quit';
+    return 'i import  |  c folder  |  r refresh  |  [ ] folders  |  q quit';
   }
 
   const scroll = maxDetailScroll > 0 ? `  |  detail ${detailScroll + 1}/${maxDetailScroll + 1}` : '';
 
+  const loadMore = hasMoreRecipes ? '  |  + more' : '';
+
   if (width < 72) {
     return mode === 'detail'
       ? `up/down scroll  |  left back  |  q quit${scroll}`
-      : 'up/down choose  |  enter detail  |  q quit';
+      : `up/down choose  |  enter detail  |  f/p  |  q quit${loadMore}`;
   }
 
   return mode === 'detail'
-    ? `up/down scroll  |  left back  |  r refresh  |  [ ] folders  |  q quit${scroll}`
-    : 'up/down choose  |  enter detail  |  r refresh  |  [ ] folders  |  q quit';
+    ? `up/down scroll  |  left back  |  f fav  |  p pin  |  m move  |  d delete  |  q quit${scroll}`
+    : `up/down choose  |  enter detail  |  f fav  |  p pin  |  i import  |  m move  |  c/e/D folders  |  q quit${loadMore}`;
 }

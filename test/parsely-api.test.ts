@@ -109,6 +109,22 @@ test('move and remove use the current REST folderName contract', async () => {
   }));
 });
 
+test('setFavorite and setPin send explicit desired state bodies', async () => {
+  const { calls, fetchFn } = createFetchStub({ success: true, isFavorite: true, isPinned: false });
+  const api = new ParselyApiClient({
+    apiBaseUrl: 'https://parsely.us',
+    fetchFn,
+  });
+
+  await api.setFavorite('recipe-1', true);
+  await api.setPin('recipe-1', false);
+
+  assert.equal((calls[0].input as URL).pathname, '/api/recipes/recipe-1/favorite');
+  assert.equal(calls[0].init?.body, JSON.stringify({ isFavorite: true }));
+  assert.equal((calls[1].input as URL).pathname, '/api/recipes/recipe-1/pin');
+  assert.equal(calls[1].init?.body, JSON.stringify({ isPinned: false }));
+});
+
 test('errors include status and response body', async () => {
   const { fetchFn } = createFetchStub({ error: 'Unauthorized' }, { status: 401 });
   const api = new ParselyApiClient({

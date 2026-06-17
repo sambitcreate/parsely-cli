@@ -5,8 +5,10 @@ import {
   buildLibraryFolders,
   buildLibraryFooter,
   clampIndex,
+  folderListCapacity,
   formatRecipeFlags,
   formatRecipeMeta,
+  recipeListCapacity,
   visibleWindow,
 } from '../src/utils/library-layout.js';
 import type { RecipeView } from '../src/models/recipe.js';
@@ -69,6 +71,13 @@ test('clampIndex handles empty and out-of-range lists', () => {
   assert.equal(clampIndex(9, 3), 2);
 });
 
+test('list capacities account for rendered folder and recipe rows', () => {
+  assert.equal(folderListCapacity(24), 6);
+  assert.equal(folderListCapacity(8), 2);
+  assert.equal(recipeListCapacity(19, 6), 2);
+  assert.equal(recipeListCapacity(10, 4), 1);
+});
+
 test('recipe metadata and flags stay compact for list rows', () => {
   assert.equal(formatRecipeMeta(recipe), '40 min  |  4 servings  |  2 ingredients  |  2 steps');
   assert.equal(formatRecipeFlags(recipe), 'FAV');
@@ -90,11 +99,15 @@ test('buildDetailLines includes title, source, ingredients, and instructions', (
 test('buildLibraryFooter adapts to empty, list, and detail states', () => {
   assert.equal(
     buildLibraryFooter({ mode: 'list', width: 100, hasRecipes: false, detailScroll: 0, maxDetailScroll: 0 }),
-    'r refresh  |  [ ] folders  |  q quit',
+    'i import  |  c folder  |  r refresh  |  [ ] folders  |  q quit',
   );
   assert.match(
-    buildLibraryFooter({ mode: 'list', width: 100, hasRecipes: true, detailScroll: 0, maxDetailScroll: 0 }),
+    buildLibraryFooter({ mode: 'list', width: 100, hasRecipes: true, hasMoreRecipes: true, detailScroll: 0, maxDetailScroll: 0 }),
     /enter detail/,
+  );
+  assert.match(
+    buildLibraryFooter({ mode: 'list', width: 100, hasRecipes: true, hasMoreRecipes: true, detailScroll: 0, maxDetailScroll: 0 }),
+    /\+ more/,
   );
   assert.match(
     buildLibraryFooter({ mode: 'detail', width: 60, hasRecipes: true, detailScroll: 2, maxDetailScroll: 5 }),
